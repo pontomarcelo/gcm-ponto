@@ -87,11 +87,35 @@ conf('lápides zeradas', (await db.listarExcluidos()).length === 0);
 
 console.log('\n── O GOOGLE NÃO PODE PERGUNTAR A CONTA TODA HORA ────────────');
 
-/* Com cinco contas logadas no navegador, o Google abre a lista de contas a cada
-   renovação de permissão — de hora em hora — se o app não disser qual usar.
-   Estas três linhas são o que mantém a renovação silenciosa. */
+console.log('\n── A VOLTA DO GOOGLE NÃO PODE DAR TELA BRANCA ───────────────');
+
+/* O Google devolve a resposta depois do # do endereço — o mesmo lugar onde o
+   app guarda a tela atual. Se o React ler primeiro, tenta abrir uma tela
+   chamada "access_token", não acha, e pinta a página de branco. */
 const fsD = await import('node:fs');
-const dv = fsD.readFileSync(new URL('../src/services/drive.js', import.meta.url), 'utf8');
+const ler = (f) => fsD.readFileSync(new URL(f, import.meta.url), 'utf8');
+const dv = ler('../src/services/drive.js');
+const mj = ler('../src/main.jsx');
+
+conf('o endereço é limpo ANTES do React desenhar',
+  mj.indexOf('lerRetornoDoGoogle();') < mj.indexOf('createRoot(document'));
+conf('e a rota anterior é reposta no lugar', /history\.replaceState/.test(dv));
+conf('rota estranha vira Ajustes em vez de tela branca',
+  /voltarPara\.includes\('access_token'\)/.test(dv));
+
+console.log('\n── AUTORIZAÇÃO NO APP INSTALADO ─────────────────────────────');
+
+/* Instalado na tela inicial, o Android bloqueia a janelinha do Google. */
+conf('o app sabe quando está instalado na tela inicial',
+  /display-mode: standalone/.test(dv));
+conf('instalado, sai da tela em vez de abrir janelinha',
+  /if \(ehAppInstalado\(\)\) \{\s*await autorizarSaindoDaTela\(\)/.test(dv));
+conf('o endereço de retorno não é inventado', /redirect_uri: RETORNO/.test(dv));
+conf('a recusa do guarda vira mensagem, não erro cru',
+  /access_denied/.test(dv) && /não autorizou/.test(dv));
+
+console.log('\n── O GOOGLE NÃO PODE PERGUNTAR A CONTA TODA HORA ────────────');
+
 conf('o app avisa ao Google qual conta usar', /hint: conta \|\| undefined/.test(dv));
 conf('e não abre o seletor de contas', /select_account: false/.test(dv));
 conf('a conta escolhida fica guardada', /setConfig\('driveConta', conta\)/.test(dv));
@@ -104,8 +128,7 @@ console.log('\n── O CACHE NÃO PODE ENGOLIR O DRIVE ────────
 /* O service worker guarda tudo em cache. Se guardar também a resposta do
    Drive, a sincronização lê a mesma versão velha para sempre e o guarda não
    percebe. Esta regra é fácil de remover sem querer numa limpeza. */
-const fs = await import('node:fs');
-const sw = fs.readFileSync(new URL("../public/service-worker.js", import.meta.url), "utf8");
+const sw = ler('../public/service-worker.js');
 conf('service worker deixa o Drive passar direto', /googleapis\.com.*&&\s*!ehFonte/.test(sw));
 conf('service worker deixa o login do Google passar direto', sw.includes("'accounts.google.com'"));
 conf('e sai antes da regra de cache', /if \(ehGoogleAPI\) return;/.test(sw));
