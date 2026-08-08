@@ -300,14 +300,18 @@ function Sincronizacao({ avisar }) {
             <IcoAlert size={19} style={{ flex: 'none' }} />
             <div>
               <b>Escolha a mesma conta em todos os aparelhos</b>
-              O Google vai perguntar uma vez só. Depois disso ele não pergunta
-              mais — o app passa a renovar a permissão sozinho, na mesma conta.
+              É a mesma conta que faz seus lançamentos atravessarem do celular
+              para o computador. Contas diferentes, Drives diferentes.
             </div>
           </div>
+
           <button className="btn btn-primary mt-14" disabled={conectando} onClick={async () => {
             setConectando(true);
             try {
               const conta = await drive.conectar();
+              /* No app instalado a página sai para o Google agora; o resto
+                 acontece na volta, tratado na abertura. */
+              if (conta === null && info.instalado) return;
               await atualizar();
               const r = await sincronizar({ avisando: true });
               if (r?.ok) avisar(conta ? `Conectado como ${conta}.` : 'Drive conectado.');
@@ -368,6 +372,20 @@ function Sincronizacao({ avisar }) {
         depois de cada lançamento. Os arquivos da gaveta não vão junto — são
         pesados demais; para eles, use o backup completo.
       </p>
+      <p className="hint">
+        <b style={{ display: 'inline' }}>Use a mesma conta nos dois aparelhos.</b>{' '}
+        Cada conta tem o seu próprio Drive: em contas diferentes, cada aparelho
+        guarda o seu arquivo e nada atravessa de um para o outro.
+      </p>
+
+      {/* No app instalado a permissão vence e não há como renovar em silêncio:
+          a janelinha do Google é bloqueada nesse modo. O botão fica sempre à
+          mão para o guarda refazer a autorização sem precisar desligar nada. */}
+      {info.instalado && (
+        <button className="btn btn-ghost" onClick={() => drive.autorizarSaindoDaTela()}>
+          <IcoUpload size={18} /> Reconectar ao Drive
+        </button>
+      )}
       <p className="hint">
         <b style={{ display: 'inline' }}>Use a mesma conta nos dois aparelhos.</b>{' '}
         Cada conta tem o seu próprio Drive: em contas diferentes, cada aparelho
