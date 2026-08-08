@@ -197,10 +197,16 @@ export function AppProvider({ children }) {
   }, [tema]);
 
 
-  /* Ao abrir o app, puxa o que foi lançado no outro aparelho. */
+  /* Ao abrir o app: primeiro conclui a autorização, se o guarda acabou de
+     voltar do Google; só então puxa o que foi lançado no outro aparelho. */
   useEffect(() => {
     if (!pronto) return;
-    sincronizar();
+    (async () => {
+      const volta = await drive.concluirRetorno();
+      if (volta?.erro) avisar(volta.erro);
+      else if (volta?.conta) avisar(`Conectado como ${volta.conta}.`);
+      await sincronizar({ avisando: !!volta?.conta });
+    })();
     return () => clearTimeout(agendado.current);
   }, [pronto]);   // eslint-disable-line react-hooks/exhaustive-deps
 
