@@ -33,10 +33,16 @@ export const CLIENT_ID_PADRAO =
      renovação, de hora em hora. */
 const ESCOPO = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
 
-/* Para onde o Google devolve o guarda depois de autorizar. Precisa bater
-   EXATAMENTE com o que está cadastrado no Google Cloud, em "URIs de
-   redirecionamento autorizados". */
-const RETORNO = `${location.origin}${location.pathname}`;
+/**
+ * Para onde o Google devolve o guarda depois de autorizar. Precisa bater
+ * EXATAMENTE com o que está cadastrado no Google Cloud, em "URIs de
+ * redirecionamento autorizados" — um caractere de diferença e ele recusa.
+ *
+ * O `index.html` é retirado de propósito: instalado na tela inicial, o app
+ * abre em /gcm-ponto/index.html, e pelo navegador em /gcm-ponto/. Sem esta
+ * limpeza seriam dois endereços diferentes, e só um deles funcionaria.
+ */
+const RETORNO = `${location.origin}${location.pathname}`.replace(/index\.html$/, '');
 const NOME_ARQUIVO = 'gcm-ponto-dados.json';
 const GIS = 'https://accounts.google.com/gsi/client';
 
