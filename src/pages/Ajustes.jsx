@@ -365,6 +365,15 @@ function Sincronizacao({ avisar }) {
         }}>
           <IcoUpload size={18} /> {sincronizando ? 'Sincronizando…' : 'Sincronizar agora'}
         </button>
+
+        {/* No app instalado a permissão vence e não há como renovar sozinho:
+            a janelinha do Google é bloqueada nesse modo. Este botão refaz a
+            autorização saindo da tela, que é o caminho que funciona ali. */}
+        {info.instalado && (
+          <button className="btn btn-ghost mt-14" onClick={() => drive.autorizarSaindoDaTela()}>
+            <IcoShield size={18} /> Reconectar ao Drive
+          </button>
+        )}
       </div>
 
       <p className="hint">
@@ -372,20 +381,6 @@ function Sincronizacao({ avisar }) {
         depois de cada lançamento. Os arquivos da gaveta não vão junto — são
         pesados demais; para eles, use o backup completo.
       </p>
-      <p className="hint">
-        <b style={{ display: 'inline' }}>Use a mesma conta nos dois aparelhos.</b>{' '}
-        Cada conta tem o seu próprio Drive: em contas diferentes, cada aparelho
-        guarda o seu arquivo e nada atravessa de um para o outro.
-      </p>
-
-      {/* No app instalado a permissão vence e não há como renovar em silêncio:
-          a janelinha do Google é bloqueada nesse modo. O botão fica sempre à
-          mão para o guarda refazer a autorização sem precisar desligar nada. */}
-      {info.instalado && (
-        <button className="btn btn-ghost" onClick={() => drive.autorizarSaindoDaTela()}>
-          <IcoUpload size={18} /> Reconectar ao Drive
-        </button>
-      )}
       <p className="hint">
         <b style={{ display: 'inline' }}>Use a mesma conta nos dois aparelhos.</b>{' '}
         Cada conta tem o seu próprio Drive: em contas diferentes, cada aparelho
