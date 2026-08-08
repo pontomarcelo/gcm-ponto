@@ -3,7 +3,8 @@ import { useApp } from '../context/AppContext.jsx';
 import { TopBar, Sheet } from '../components/UI.jsx';
 import {
   nomeCompetencia, horasCurto, hojeISO, formatarDataExtenso, tipoPorId,
-  competenciaAtual, MESES, faixaHoraria
+  competenciaAtual, MESES, MESES_CURTO, faixaHoraria, diaSemana,
+  diasDaCompetencia, periodoDaCompetencia, periodoCurto
 } from '../services/calc.js';
 import { IcoChevron, IcoBack, IcoPlus } from '../components/Icons.jsx';
 
@@ -14,9 +15,13 @@ export default function Calendario({ abrirLancamento }) {
   const [diaAberto, setDiaAberto] = useState(null);
 
   const [ano, mes] = competencia.split('-').map(Number);
-  const diasNoMes = new Date(ano, mes, 0).getDate();
-  const primeiroDiaSemana = new Date(ano, mes - 1, 1).getDay();
   const hoje = hojeISO();
+
+  /* A grade não é o mês do calendário: é a janela 21→20, que atravessa dois
+     meses. Por isso as células carregam a data inteira, não só o número. */
+  const { inicio } = periodoDaCompetencia(competencia);
+  const dias = useMemo(() => diasDaCompetencia(competencia), [competencia]);
+  const primeiroDiaSemana = diaSemana(inicio);
 
   /* Um dia pode ter mais de um lançamento: a cor segue o mais severo. */
   const porDia = useMemo(() => {
@@ -37,10 +42,7 @@ export default function Calendario({ abrirLancamento }) {
     setCompetencia(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   };
 
-  const celulas = [
-    ...Array(primeiroDiaSemana).fill(null),
-    ...Array.from({ length: diasNoMes }, (_, i) => i + 1)
-  ];
+  const celulas = [...Array(primeiroDiaSemana).fill(null), ...dias];
 
   const dadosDoDia = diaAberto ? porDia.get(diaAberto) : null;
 
@@ -54,9 +56,12 @@ export default function Calendario({ abrirLancamento }) {
             <div className="spread" style={{ marginBottom: 16 }}>
               <button className="icon-btn" style={{ background: 'var(--surface-2)', color: 'var(--ink)' }}
                 onClick={() => mudarMes(-1)} aria-label="Mês anterior"><IcoBack size={18} /></button>
-              <b style={{ fontFamily: 'var(--font-display)', fontSize: 16 }}>
-                {MESES[mes - 1]} {ano}
-              </b>
+              <div style={{ textAlign: 'center' }}>
+                <b style={{ fontFamily: 'var(--font-display)', fontSize: 16, display: 'block' }}>
+                  {MESES[mes - 1]} {ano}
+                </b>
+                <span className="hint" style={{ margin: 0, fontSize: 12 }}>{periodoCurto(competencia)}</span>
+              </div>
               <button className="icon-btn" style={{ background: 'var(--surface-2)', color: 'var(--ink)' }}
                 onClick={() => mudarMes(1)} aria-label="Próximo mês"><IcoChevron size={18} /></button>
             </div>
@@ -66,9 +71,10 @@ export default function Calendario({ abrirLancamento }) {
             </div>
 
             <div className="cal-grid">
-              {celulas.map((dia, i) => {
-                if (!dia) return <div key={`v${i}`} className="cal-day empty" />;
-                const data = `${competencia}-${String(dia).padStart(2, '0')}`;
+              {celulas.map((data, i) => {
+                if (!data) return <div key={`v${i}`} className="cal-day empty" />;
+                const dia = Number(data.slice(8, 10));
+                const mesDaCelula = Number(data.slice(5, 7));
                 const info = porDia.get(data);
                 const classe = info ? info.classe : '';
                 return (
@@ -76,9 +82,9 @@ export default function Calendario({ abrirLancamento }) {
                     key={data}
                     className={`cal-day ${classe} ${data === hoje ? 'today' : ''}`}
                     onClick={() => (info ? setDiaAberto(data) : abrirLancamento(null, data))}
-                    aria-label={`Dia ${dia}${info ? `, ${horasCurto(info.horas)}` : ', sem lançamento'}`}
+                    aria-label={`${dia} de ${MESES[mesDaCelula - 1]}${info ? `, ${horasCurto(info.horas)}` : ', sem lançamento'}`}
                   >
-                    {dia}
+                    {dia === 1 ? `1 ${MESES_CURTO[mesDaCelula - 1]}` : dia}
                     {info && info.horas > 0 && (
                       <span className="dot" style={{
                         background: classe === 'over' ? 'var(--red)'
