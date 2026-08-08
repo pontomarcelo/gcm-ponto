@@ -135,8 +135,25 @@ export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatur
   y += Math.ceil(campos.length / 2) * 6.5 + 4;
 
   /* -------------------------------------------------------------- Tabela */
+
+  /**
+   * A coluna de data.
+   *
+   * Escala de 24h vira o dia: entra 22/07 e sai 23/07. Mostrar só a entrada
+   * obriga quem confere a deduzir a saída pelo "(+1d)" do horário — e num
+   * documento que vai para o comando, o dia trabalhado precisa estar escrito,
+   * não deduzido. Quando não vira o dia, sai só a data, sem repetição inútil.
+   */
+  const colunaData = (i) => {
+    const dia = (d) => `${formatarData(d)} ${DIAS_SEMANA[diaSemana(d)]}`;
+    if (!i.dataSaida || i.dataSaida === i.data) {
+      return `${formatarData(i.data)}\n${DIAS_SEMANA[diaSemana(i.data)]}`;
+    }
+    return `${dia(i.data)}\na ${dia(i.dataSaida)}`;
+  };
+
   const corpo = resumo.itens.map((i) => [
-    `${formatarData(i.data)}\n${DIAS_SEMANA[diaSemana(i.data)]}`,
+    colunaData(i),
     i.horas > 0 ? faixaHoraria(i) : '—',
     tipoPorId(i.tipo).nome,
     i.comandante || '—',
@@ -156,10 +173,10 @@ export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatur
     headStyles: { fillColor: NAVY, textColor: 255, fontSize: 7.6, fontStyle: 'bold', halign: 'center' },
     alternateRowStyles: { fillColor: [247, 249, 252] },
     columnStyles: {
-      0: { cellWidth: 20, halign: 'center' },
-      1: { cellWidth: 24, halign: 'center' },
-      2: { cellWidth: 20 },
-      3: { cellWidth: 30 },
+      0: { cellWidth: 27, halign: 'center' },
+      1: { cellWidth: 21, halign: 'center' },
+      2: { cellWidth: 18 },
+      3: { cellWidth: 28 },
       5: { cellWidth: 16, halign: 'center' },
       6: { cellWidth: 16, halign: 'center' },
       7: { cellWidth: 16, halign: 'center', fontStyle: 'bold' }
@@ -227,7 +244,11 @@ export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatur
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(...NAVY);
-      doc.text(`${formatarData(i.data)} · ${cfg.nome} · ${faixaHoraria(i)}`, L + 3, y + 1);
+      /* Mesma razão da tabela: a escala que vira o dia mostra os dois dias. */
+      const quando = i.dataSaida && i.dataSaida !== i.data
+        ? `${formatarData(i.data)} a ${formatarData(i.dataSaida)}`
+        : formatarData(i.data);
+      doc.text(`${quando} · ${cfg.nome} · ${faixaHoraria(i)}`, L + 3, y + 1);
 
       let yy = y + 6;
       medidas.forEach(([rot, quebrado]) => {
