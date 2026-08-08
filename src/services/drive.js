@@ -27,11 +27,16 @@ export const CLIENT_ID_PADRAO =
   '618176113793-28fqt6kapivpgv66qqg3tcjdce4mrnej.apps.googleusercontent.com';
 
 /* Dois escopos, os dois "não sensíveis":
-   - drive.file: só o arquivo que o app cria. Não vê mais nada do Drive.
-   - userinfo.email: só para SABER qual conta foi escolhida. Sem isso o app não
-     tem como dizer ao Google "renove naquela mesma conta", e o Google abre a
-     lista de contas a cada renovação — de hora em hora. */
+   - drive.file: só o arquivo que o app cria. Não vê nada mais do Drive.
+   - userinfo.email: só para SABER qual conta foi escolhida, e poder pedir ao
+     Google que renove sempre nela. Sem isso ele abre a lista de contas a cada
+     renovação, de hora em hora. */
 const ESCOPO = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+
+/* Para onde o Google devolve o guarda depois de autorizar. Precisa bater
+   EXATAMENTE com o que está cadastrado no Google Cloud, em "URIs de
+   redirecionamento autorizados". */
+const RETORNO = `${location.origin}${location.pathname}`;
 const NOME_ARQUIVO = 'gcm-ponto-dados.json';
 const GIS = 'https://accounts.google.com/gsi/client';
 
@@ -42,6 +47,23 @@ let token = null;
 let expiraEm = 0;
 let clienteToken = null;
 let clienteConta;   // a conta com que o cliente atual foi montado
+
+/**
+ * Instalado na tela inicial, o app roda sem barra de navegador — e nesse modo
+ * o Android BLOQUEIA a janelinha que o Google usa para pedir a conta. Sem
+ * janela, não há como autorizar.
+ *
+ * A saída é sair da tela inteira para o Google e voltar depois, como faz
+ * qualquer site. Só vale para a autorização; o resto do app não muda.
+ */
+export function ehAppInstalado() {
+  try {
+    return window.matchMedia?.('(display-mode: standalone)')?.matches === true
+      || window.navigator?.standalone === true;
+  } catch {
+    return false;
+  }
+}
 
 const temToken = () => !!token && Date.now() < expiraEm - 60000;
 
@@ -92,15 +114,102 @@ async function descobrirConta(t) {
   }
 }
 
+/* ------------------------------------------- Autorização saindo da tela */
+
+/**
+ * Manda o guarda para o Google numa navegação de página inteira. É o caminho
+ * que funciona no app instalado, onde a janelinha é bloqueada.
+ *
+ * A rota em que ele estava fica guardada para o app voltar no mesmo lugar.
+ */
+export async function autorizarSaindoDaTela() {
+  const clientId = await getClientId();
+  if (!clientId) throw new Error('Falta o ID do cliente do Google nos Ajustes.');
+  const conta = await contaConectada();
+
+  try { sessionStorage.setItem('driveVoltarPara', location.hash || '#/ajustes'); } catch { /* sem sessão, volta para Ajustes */ }
+
+  const p = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: RETORNO,
+    response_type: 'token',
+    scope: ESCOPO,
+    include_granted_scopes: 'true',
+    prompt: 'consent'
+  });
+  if (conta) p.set('login_hint', conta);
+
+  location.href = `https://accounts.google.com/o/oauth2/v2/auth?${p.toString()}`;
+}
+
+/**
+ * Lê a resposta do Google quando ele devolve o guarda para o app.
+ *
+ * O Google devolve os dados depois do # do endereço, que é o mesmo lugar onde
+ * este app guarda a tela atual. Por isso a resposta é lida e APAGADA na hora,
+ * e a rota anterior é reposta — senão o app tentaria abrir uma tela chamada
+ * "access_token" e mostraria página em branco.
+ */
+let retornoPendente = null;
+
+export function lerRetornoDoGoogle() {
+  if (retornoPendente) return retornoPendente;
+  const bruto = (location.hash || '').replace(/^#/, '');
+  if (!bruto.includes('access_token=') && !bruto.includes('error=')) return null;
+
+  const p = new URLSearchParams(bruto);
+  let voltarPara = '#/ajustes';
+  try { voltarPara = sessionStorage.getItem('driveVoltarPara') || '#/ajustes'; } catch { /* padrão */ }
+  try { sessionStorage.removeItem('driveVoltarPara'); } catch { /* nada */ }
+  if (voltarPara.includes('access_token') || !voltarPara.startsWith('#/')) voltarPara = '#/ajustes';
+
+  history.replaceState(null, '', `${location.pathname}${location.search}${voltarPara}`);
+
+  const erro = p.get('error');
+  if (erro) {
+    retornoPendente = { erro: erro === 'access_denied'
+      ? 'Você não autorizou o acesso ao Drive.'
+      : 'O Google recusou a autorização. Tente conectar de novo.' };
+    return retornoPendente;
+  }
+
+  const t = p.get('access_token');
+  if (!t) return null;
+  token = t;
+  expiraEm = Date.now() + (Number(p.get('expires_in') || 3600) * 1000);
+  retornoPendente = { token: t };
+  return retornoPendente;
+}
+
+/**
+ * Fecha a conexão depois da volta do Google. Chamado uma vez, na abertura.
+ * Devolve o e-mail conectado, ou null quando não houve volta nenhuma.
+ */
+export async function concluirRetorno() {
+  const r = lerRetornoDoGoogle();
+  retornoPendente = null;
+  if (!r) return null;
+  if (r.erro) {
+    await setConfig('driveErro', r.erro).catch(() => {});
+    return { erro: r.erro };
+  }
+  const conta = await descobrirConta(r.token);
+  if (conta) await setConfig('driveConta', conta);
+  clienteConta = undefined;
+  await setConectado(true);
+  await setConfig('driveErro', null).catch(() => {});
+  return { conta };
+}
+
+
 async function pedirToken({ interativo }) {
   await carregarGIS();
   const clientId = await getClientId();
   if (!clientId) throw new Error('Falta o ID do cliente do Google nos Ajustes.');
-
   const conta = await contaConectada();
 
   return new Promise((resolve, reject) => {
-    /* O `hint` diz ao Google QUAL conta usar. Com ele, a renovação é silenciosa;
+    /* O `hint` diz ao Google QUAL conta usar. Com ele a renovação é silenciosa;
        sem ele, o Google abre a lista de contas toda vez. O cliente é remontado
        quando a conta muda, porque o hint é fixado na criação. */
     if (!clienteToken || clienteConta !== conta) {
@@ -126,9 +235,8 @@ async function pedirToken({ interativo }) {
       expiraEm = Date.now() + (Number(resposta.expires_in || 3600) * 1000);
       resolve(token);
     };
-    /* A tela de permissão só aparece na PRIMEIRA conexão, quando ainda não se
-       sabe a conta. Depois disso é sempre silencioso, mesmo quando o guarda
-       aperta "Sincronizar agora". */
+    /* A tela de permissão só aparece quando ainda não se sabe a conta. Depois
+       disso é sempre silencioso, mesmo ao apertar "Sincronizar agora". */
     clienteToken.requestAccessToken({ prompt: (interativo && !conta) ? 'consent' : '' });
   });
 }
@@ -138,13 +246,22 @@ async function garantirToken({ interativo = false } = {}) {
   return pedirToken({ interativo });
 }
 
-/** Liga a sincronização. Abre a tela de permissão do Google. */
+/**
+ * Liga a sincronização.
+ *
+ * No app instalado na tela inicial, sai da tela para o Google — a janelinha
+ * seria bloqueada ali. No navegador usa a janelinha, que é mais confortável
+ * por não tirar o guarda de onde ele estava.
+ */
 export async function conectar() {
+  if (ehAppInstalado()) {
+    await autorizarSaindoDaTela();
+    return null;   // a página já está saindo; o resto acontece na volta
+  }
   const t = await pedirToken({ interativo: true });
-  /* Guarda a conta escolhida: é o que faz o Google parar de perguntar. */
   const conta = await descobrirConta(t);
   if (conta) await setConfig('driveConta', conta);
-  clienteConta = undefined;   // força remontar o cliente já com o hint
+  clienteConta = undefined;
   await setConectado(true);
   return conta;
 }
@@ -276,7 +393,13 @@ export async function sincronizar({ interativo = false } = {}) {
         mudouAqui: mudou(local, junto)
       };
     } catch (e) {
-      const motivo = e?.message || 'Falha ao sincronizar.';
+      let motivo = e?.message || 'Falha ao sincronizar.';
+      /* No app instalado não há como renovar em silêncio: a janelinha é
+         bloqueada. Quando a permissão vence, o guarda precisa tocar em
+         conectar de novo — e a mensagem tem que dizer isso, não "erro". */
+      if (ehAppInstalado() && /autoriza|permiss|popup|denied/i.test(motivo)) {
+        motivo = 'A permissão do Google venceu. Toque em "Reconectar ao Drive".';
+      }
       await setConfig('driveErro', motivo).catch(() => {});
       return { ok: false, erro: motivo };
     } finally {
@@ -293,7 +416,7 @@ export async function estado() {
     conectado(), getConfig('driveUltimaSync', null), getConfig('driveErro', null),
     getClientId(), contaConectada()
   ]);
-  return { ligado, ultima, erro, clientId, conta };
+  return { ligado, ultima, erro, clientId, conta, instalado: ehAppInstalado() };
 }
 
 /** '2 minutos', 'há 3 dias' — para o guarda saber se pode confiar. */
