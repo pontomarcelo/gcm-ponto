@@ -85,18 +85,52 @@ await db.apagarTudo();
 conf('lançamentos zerados', (await db.listarLancamentos()).length === 0);
 conf('lápides zeradas', (await db.listarExcluidos()).length === 0);
 
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Daqui para baixo o teste lê o CÓDIGO em vez de executá-lo.
+
+   São regras que só falham no aparelho do guarda, com o Google do outro lado
+   — não dá para reproduzir aqui. Mas todas foram descobertas na marra, com o
+   app já no ar, e todas são fáceis de apagar sem querer numa limpeza futura.
+   Ficam escritas para que isso não aconteça em silêncio.
+   ───────────────────────────────────────────────────────────────────────── */
+const fs = await import('node:fs');
+const ler = (f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
+const dv = ler('../src/services/drive.js');
+const mj = ler('../src/main.jsx');
+const ajTela = ler('../src/pages/Ajustes.jsx');
+const sw = ler('../public/service-worker.js');
+
+console.log('\n── PERMISSÕES E CONTA ───────────────────────────────────────');
+
+/* Permissão a mais é permissão que o Google pode recusar — e recusou: a conta
+   aparecia como "não identificada" na tela. O próprio Drive diz de quem é a
+   conta, sem custar permissão nenhuma além da que o app já tem. */
+conf('o app pede UMA permissão só, e das leves',
+  /const ESCOPO = 'https:\/\/www\.googleapis\.com\/auth\/drive\.file';/.test(dv));
+conf('não pede permissão para ler o e-mail', !/userinfo/.test(dv));
+conf('a conta vem do próprio Drive', /drive\/v3\/about\?fields=user/.test(dv));
+conf('conta não descoberta é resolvida na sincronização seguinte',
+  /if \(!\(await contaConectada\(\)\)\)/.test(dv));
+conf('o aviso da conta aparece uma vez só na tela',
+  (ajTela.match(/Use a mesma conta nos dois aparelhos/g) || []).length === 1);
+
 console.log('\n── O GOOGLE NÃO PODE PERGUNTAR A CONTA TODA HORA ────────────');
+
+/* Com várias contas logadas no navegador, o Google abre a lista a cada
+   renovação — de hora em hora — se o app não disser qual usar. */
+conf('o app avisa ao Google qual conta usar', /hint: conta \|\| undefined/.test(dv));
+conf('e não abre o seletor de contas', /select_account: false/.test(dv));
+conf('a conta escolhida fica guardada', /setConfig\('driveConta', conta\)/.test(dv));
+conf('desconectar limpa a conta guardada', /setConfig\('driveConta', null\)/.test(dv));
+conf('a tela de permissão só aparece sem conta conhecida',
+  /prompt: \(interativo && !conta\)/.test(dv));
 
 console.log('\n── A VOLTA DO GOOGLE NÃO PODE DAR TELA BRANCA ───────────────');
 
 /* O Google devolve a resposta depois do # do endereço — o mesmo lugar onde o
    app guarda a tela atual. Se o React ler primeiro, tenta abrir uma tela
    chamada "access_token", não acha, e pinta a página de branco. */
-const fsD = await import('node:fs');
-const ler = (f) => fsD.readFileSync(new URL(f, import.meta.url), 'utf8');
-const dv = ler('../src/services/drive.js');
-const mj = ler('../src/main.jsx');
-
 conf('o endereço é limpo ANTES do React desenhar',
   mj.indexOf('lerRetornoDoGoogle();') < mj.indexOf('createRoot(document'));
 conf('e a rota anterior é reposta no lugar', /history\.replaceState/.test(dv));
@@ -122,21 +156,21 @@ conf('o app instalado abre na pasta, não no index.html', mf.start_url === './')
 conf('a recusa do guarda vira mensagem, não erro cru',
   /access_denied/.test(dv) && /não autorizou/.test(dv));
 
-console.log('\n── O GOOGLE NÃO PODE PERGUNTAR A CONTA TODA HORA ────────────');
+console.log('\n── NUNCA FICAR ESPERANDO PARA SEMPRE ────────────────────────');
 
-conf('o app avisa ao Google qual conta usar', /hint: conta \|\| undefined/.test(dv));
-conf('e não abre o seletor de contas', /select_account: false/.test(dv));
-conf('a conta escolhida fica guardada', /setConfig\('driveConta', conta\)/.test(dv));
-conf('desconectar limpa a conta guardada', /setConfig\('driveConta', null\)/.test(dv));
-conf('a tela de permissão só aparece sem conta conhecida',
-  /prompt: \(interativo && !conta\)/.test(dv));
+/* O pior defeito daqui não é falhar: é ficar esperando. Janelinha bloqueada no
+   app instalado = o Google não responde nem com erro, e o botão fica preso em
+   "Sincronizando…" sem volta, até o guarda fechar o app. */
+conf('instalado, nem tenta a janelinha que seria bloqueada',
+  /if \(ehAppInstalado\(\)\) \{\s*throw new Error/.test(dv));
+conf('janelinha bloqueada vira erro, não silêncio', /error_callback:/.test(dv));
+conf('e existe prazo para o Google responder', /setTimeout\(\(\) => reject/.test(dv));
+conf('o prazo é desarmado quando ele responde', /clearTimeout\(desistir\)/.test(dv));
 
 console.log('\n── O CACHE NÃO PODE ENGOLIR O DRIVE ─────────────────────────');
 
 /* O service worker guarda tudo em cache. Se guardar também a resposta do
-   Drive, a sincronização lê a mesma versão velha para sempre e o guarda não
-   percebe. Esta regra é fácil de remover sem querer numa limpeza. */
-const sw = ler('../public/service-worker.js');
+   Drive, a sincronização lê a mesma versão velha para sempre. */
 conf('service worker deixa o Drive passar direto', /googleapis\.com.*&&\s*!ehFonte/.test(sw));
 conf('service worker deixa o login do Google passar direto', sw.includes("'accounts.google.com'"));
 conf('e sai antes da regra de cache', /if \(ehGoogleAPI\) return;/.test(sw));
