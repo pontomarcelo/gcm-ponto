@@ -7,6 +7,26 @@ import {
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
+/**
+ * A competência passou a ser 21→20. Lançamentos gravados antes dessa mudança
+ * carregam o carimbo do mês do calendário — um serviço do dia 25 de julho está
+ * marcado como julho, quando pertence a agosto.
+ *
+ * Isto corrige o carimbo uma vez só, na abertura. A DATA do serviço nunca é
+ * tocada: só o mês a que ele pertence. Roda em silêncio e, quando não há nada
+ * fora do lugar, não escreve no banco.
+ */
+async function recarimbar(lista) {
+  const fora = lista.filter((l) => l.data && l.competencia !== competenciaDe(l.data));
+  if (!fora.length) return lista;
+
+  const corrigidos = fora.map((l) => ({ ...l, competencia: competenciaDe(l.data) }));
+  await Promise.all(corrigidos.map((l) => db.salvarLancamento(l)));
+
+  const porId = new Map(corrigidos.map((l) => [l.id, l]));
+  return lista.map((l) => porId.get(l.id) || l);
+}
+
 export function AppProvider({ children }) {
   const [pronto, setPronto] = useState(false);
   const [perfil, setPerfil] = useState(null);
@@ -24,7 +44,7 @@ export function AppProvider({ children }) {
           db.getPerfil(), db.listarLancamentos(), db.listarCompetencias(), db.getConfig('tema', 'light')
         ]);
         setPerfil(p || null);
-        setLancamentos(l || []);
+        setLancamentos(await recarimbar(l || []));
         setFechamentos(c || []);
         setTema(t || 'light');
       } catch (e) {
