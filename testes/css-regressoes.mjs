@@ -36,6 +36,10 @@ conf('navegação inferior com minmax(0,1fr)',
 conf('rótulo do teto na régua do termômetro não vaza',
   /\.termo-regua span:last-child\{transform:translate(X)?\(-100%\)\}/.test(css));
 
+conf('abertura e fechamento da competência marcados na grade',
+  /\.cal-day\.abre\{box-shadow:inset 3px 0 0 var\(--gold\)\}/.test(css)
+  && /\.cal-day\.fecha\{box-shadow:inset -3px 0 0 var\(--gold\)\}/.test(css));
+
 conf('três larguras de layout definidas',
   ['720px', '1024px', '1500px'].every((l) => css.includes(l)));
 
