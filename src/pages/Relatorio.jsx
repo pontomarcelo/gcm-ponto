@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { TopBar, Sheet } from '../components/UI.jsx';
 import {
-  CARGA_MENSAL, LIMITE_EXTRA, horasCurto, nomeCompetencia, competenciaAtual
+  CARGA_MENSAL, LIMITE_EXTRA, horasCurto, nomeCompetencia, competenciaAtual, periodoCurto
 } from '../services/calc.js';
 import { compartilharPDF, baixarArquivo, abrirWhatsApp, abrirEmail, imprimirPDF } from '../services/share.js';
+import { baixarBackupCompleto } from '../services/backup.js';
 import {
   pinCadastrado, cadastrarPin, validarPin, biometriaDisponivel, biometriaCadastrada,
   cadastrarBiometria, validarBiometria, abrirCameraFrontal, capturarQuadro, pararCamera, gerarSelo
@@ -24,6 +25,11 @@ export default function Relatorio({ voltar }) {
   const [pdf, setPdf] = useState(null);          // { blob, nomeArquivo }
   const [gerando, setGerando] = useState(false);
   const [assinando, setAssinando] = useState(false);
+
+  /* Aviso de backup: aparece logo depois de fechar a competência. É o momento
+     em que o mês virou prova — se o celular sumir agora, some com ele. */
+  const [pedindoBackup, setPedindoBackup] = useState(false);
+  const [progressoBackup, setProgressoBackup] = useState(null);
 
   const assinatura = fechamento?.assinatura || null;
   const mesCorrente = competencia === competenciaAtual();
@@ -58,7 +64,7 @@ export default function Relatorio({ voltar }) {
 
   return (
     <>
-      <TopBar titulo="Relatório" subtitulo={nomeCompetencia(competencia)} voltar={voltar} />
+      <TopBar titulo="Relatório" subtitulo={`${nomeCompetencia(competencia)} · ${periodoCurto(competencia)}`} voltar={voltar} />
 
       <div className="screen">
         <div className="pull-up">
@@ -104,7 +110,10 @@ export default function Relatorio({ voltar }) {
                 Fechada em {new Date(fechamento.fechadaEm).toLocaleDateString('pt-BR')}. Os lançamentos ficaram travados.
               </div>
             </div>
-            <button className="btn btn-ghost" onClick={async () => {
+            <button className="btn btn-navy" onClick={() => setPedindoBackup(true)}>
+              <IcoShield size={18} /> Fazer backup deste mês
+            </button>
+            <button className="btn btn-ghost mt-14" onClick={async () => {
               await reabrirCompetencia(competencia);
               avisar('Competência reaberta para edição.');
             }}>Reabrir para corrigir</button>
@@ -208,9 +217,57 @@ export default function Relatorio({ voltar }) {
           <button className="btn btn-navy mt-20" onClick={async () => {
             await fecharCompetencia(competencia, resumo);
             setConfirmandoFechar(false);
-            avisar('Competência fechada.');
+            setPedindoBackup(true);
           }}>Confirmar fechamento</button>
           <button className="btn btn-ghost mt-14" onClick={() => setConfirmandoFechar(false)}>Cancelar</button>
+        </Sheet>
+      )}
+
+      {pedindoBackup && (
+        <Sheet
+          titulo="Competência fechada"
+          subtitulo={`Guarde ${nomeCompetencia(competencia)} fora do celular`}
+          fechar={() => { setPedindoBackup(false); setProgressoBackup(null); }}
+        >
+          <div className="alert alert-orange">
+            <IcoAlert size={19} style={{ flex: 'none' }} />
+            <div>
+              <b>Este mês só existe aqui dentro</b>
+              O app não usa servidor. Se o aparelho quebrar ou sumir, estas
+              {' '}{horasCurto(resumo.total)} vão junto. O backup completo leva os
+              lançamentos e os arquivos da gaveta num pacote só.
+            </div>
+          </div>
+
+          {progressoBackup && (
+            <div className="alert alert-blue">
+              <div><b>Preparando o pacote</b>{progressoBackup}</div>
+            </div>
+          )}
+
+          <button className="btn btn-navy" disabled={!!progressoBackup} onClick={async () => {
+            try {
+              const r = await baixarBackupCompleto(setProgressoBackup);
+              setPedindoBackup(false);
+              avisar(`Backup ${r.via}: ${r.nome}`);
+            } catch (e) {
+              avisar(e?.message || 'Não consegui gerar o backup.');
+            } finally {
+              setProgressoBackup(null);
+            }
+          }}>
+            <IcoShield size={18} /> {progressoBackup ? 'Gerando…' : 'Fazer backup agora'}
+          </button>
+
+          <p className="hint">
+            Mande o arquivo para o seu e-mail ou salve no Google Drive. Para
+            restaurar num aparelho novo: Ajustes → Restaurar backup.
+          </p>
+
+          <button className="btn btn-ghost" disabled={!!progressoBackup}
+            onClick={() => setPedindoBackup(false)}>
+            Depois eu faço
+          </button>
         </Sheet>
       )}
 
