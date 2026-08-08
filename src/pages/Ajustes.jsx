@@ -4,6 +4,7 @@ import { TopBar, Sheet } from '../components/UI.jsx';
 import Cadastro from './Cadastro.jsx';
 import { baixarBackup, baixarBackupCompleto, restaurarBackup } from '../services/backup.js';
 import { apagarTudo } from '../services/db.js';
+import * as drive from '../services/drive.js';
 import {
   pinCadastrado, removerPin, cadastrarPin, biometriaDisponivel,
   biometriaCadastrada, cadastrarBiometria, removerBiometria
@@ -13,7 +14,7 @@ import {
 } from '../services/calc.js';
 import {
   IcoUser, IcoLock, IcoFinger, IcoDownload, IcoUpload, IcoMoon, IcoSun,
-  IcoTrash, IcoChevron, IcoCheck, IcoShield, IcoDoc, IcoPasta, IcoPacote
+  IcoTrash, IcoChevron, IcoCheck, IcoShield, IcoDoc, IcoPasta, IcoPacote, IcoAlert
 } from '../components/Icons.jsx';
 
 export default function Ajustes({ ir }) {
@@ -149,6 +150,9 @@ export default function Ajustes({ ir }) {
             <span className={`tag ${tema === 'dark' ? 'tag-green' : 'tag-gray'}`}>{tema === 'dark' ? 'ligado' : 'desligado'}</span>)}
         </div>
 
+        <div className="section-title">Sincronização entre aparelhos</div>
+        <Sincronizacao avisar={avisar} />
+
         <div className="section-title">Gaveta de arquivos</div>
         {linha(IcoPasta, 'Meus arquivos',
           'Fotos da folha assinada, escalas e comprovantes',
@@ -255,6 +259,144 @@ export default function Ajustes({ ir }) {
     </>
   );
 }
+
+/* --------------------------------------------------- Sincronização (Drive) */
+
+/**
+ * Liga e acompanha a cópia comum no Google Drive.
+ *
+ * Mostra sempre QUANDO foi a última vez. Sincronização que se diz "ativa" sem
+ * dizer quando funcionou pela última vez não serve para quem depende dela.
+ */
+function Sincronizacao({ avisar }) {
+  const { sincronizar, sincronizando, ultimaSync } = useApp();
+  const [info, setInfo] = useState(null);
+  const [conectando, setConectando] = useState(false);
+  const [trocandoId, setTrocandoId] = useState(false);
+  const [novoId, setNovoId] = useState('');
+
+  const atualizar = async () => setInfo(await drive.estado());
+  useEffect(() => { atualizar(); }, [ultimaSync, sincronizando]);
+
+  if (!info) return <div className="card"><p className="hint" style={{ margin: 0 }}>Carregando…</p></div>;
+
+  const quando = info.ultima || ultimaSync;
+  const atrasado = quando && (Date.now() - quando) > 3 * 86400000;
+
+  if (!info.ligado) {
+    return (
+      <>
+        <div className="card">
+          <p className="hint" style={{ marginTop: 0 }}>
+            Hoje seus lançamentos ficam só neste aparelho. Ligando a sincronização,
+            eles passam a ir para o <b style={{ display: 'inline' }}>seu</b> Google Drive
+            e aparecem também no computador — e ao contrário.
+          </p>
+          <p className="hint">
+            O app enxerga apenas o arquivo que ele mesmo cria. Não vê suas fotos,
+            nem seus documentos, nem mais nada do Drive.
+          </p>
+          <button className="btn btn-primary mt-14" disabled={conectando} onClick={async () => {
+            setConectando(true);
+            try {
+              await drive.conectar();
+              await atualizar();
+              const r = await sincronizar({ avisando: true });
+              if (r?.ok) avisar('Drive conectado.');
+            } catch (e) {
+              avisar(e?.message || 'Não consegui conectar ao Drive.');
+            } finally {
+              setConectando(false);
+            }
+          }}>
+            <IcoUpload size={18} /> {conectando ? 'Conectando…' : 'Conectar ao Google Drive'}
+          </button>
+        </div>
+        <p className="hint">
+          O Google vai avisar que o app não foi verificado. É esperado: ele é seu,
+          não está publicado em loja nenhuma. Toque em Avançado e siga.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="card">
+        <div className="kv">
+          <span>Estado</span>
+          <span className="tag tag-green">ligado</span>
+        </div>
+        <div className="kv">
+          <span>Última sincronização</span>
+          <b style={{ color: atrasado ? 'var(--red)' : 'var(--ink)' }}>
+            {sincronizando ? 'agora…' : drive.desdeQuando(quando)}
+          </b>
+        </div>
+        {info.erro && (
+          <div className="alert alert-orange mt-14">
+            <IcoAlert size={19} style={{ flex: 'none' }} />
+            <div><b>A última tentativa falhou</b>{info.erro}</div>
+          </div>
+        )}
+        <button className="btn btn-navy mt-14" disabled={sincronizando} onClick={async () => {
+          await sincronizar({ avisando: true });
+          atualizar();
+        }}>
+          <IcoUpload size={18} /> {sincronizando ? 'Sincronizando…' : 'Sincronizar agora'}
+        </button>
+      </div>
+
+      <p className="hint">
+        Sincroniza sozinha ao abrir o app, ao voltar para ele e alguns segundos
+        depois de cada lançamento. Os arquivos da gaveta não vão junto — são
+        pesados demais; para eles, use o backup completo.
+      </p>
+
+      <div className="stack-2">
+        {linhaSimples(IcoLock, 'Trocar o ID do cliente Google',
+          'Só se você refizer a configuração no Google Cloud',
+          () => { setNovoId(info.clientId || ''); setTrocandoId(true); })}
+        {linhaSimples(IcoTrash, 'Desligar a sincronização',
+          'Não apaga nada, nem aqui nem no Drive',
+          async () => { await drive.desconectar(); atualizar(); avisar('Sincronização desligada.'); })}
+      </div>
+
+      {trocandoId && (
+        <Sheet titulo="ID do cliente Google" subtitulo="Gerado no Google Cloud, em Clientes"
+          fechar={() => setTrocandoId(false)}>
+          <div className="field">
+            <label htmlFor="clientId">ID do cliente</label>
+            <input id="clientId" className="input" value={novoId}
+              onChange={(e) => setNovoId(e.target.value.trim())}
+              placeholder="000000-xxxx.apps.googleusercontent.com" />
+          </div>
+          <button className="btn btn-primary mt-14" onClick={async () => {
+            await drive.setClientId(novoId);
+            setTrocandoId(false);
+            atualizar();
+            avisar('ID salvo. Conecte de novo.');
+          }}>Salvar</button>
+          <button className="btn btn-ghost mt-14" onClick={() => setTrocandoId(false)}>Cancelar</button>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+/** Mesma linha da lista de Ajustes, usável fora do componente principal. */
+const linhaSimples = (Icone, titulo, descricao, aoTocar) => (
+  <button className="item" style={{ width: '100%' }} onClick={aoTocar}>
+    <div className="topbar-badge" style={{ background: 'var(--surface-2)', color: 'var(--navy-600)', border: '1px solid var(--line)' }}>
+      <Icone size={19} />
+    </div>
+    <div className="item-main">
+      <div className="t">{titulo}</div>
+      <div className="s">{descricao}</div>
+    </div>
+    <div style={{ color: 'var(--muted)' }}><IcoChevron size={16} /></div>
+  </button>
+);
 
 /* --------------------------------------------------------- Troca de PIN */
 
