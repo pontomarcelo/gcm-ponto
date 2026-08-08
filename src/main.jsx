@@ -1,7 +1,15 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import { lerRetornoDoGoogle } from './services/drive.js';
 import './styles/global.css';
+
+/* ANTES de o React desenhar qualquer coisa.
+   Ao voltar da autorização, o Google devolve os dados depois do # do endereço
+   — o mesmo lugar onde este app guarda a tela atual. Se o React ler primeiro,
+   tenta abrir uma tela chamada "access_token", não acha, e mostra página em
+   branco. Aqui a resposta é recolhida e o endereço volta ao normal. */
+lerRetornoDoGoogle();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
