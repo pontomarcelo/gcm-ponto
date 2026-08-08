@@ -296,13 +296,21 @@ function Sincronizacao({ avisar }) {
             O app enxerga apenas o arquivo que ele mesmo cria. Não vê suas fotos,
             nem seus documentos, nem mais nada do Drive.
           </p>
+          <div className="alert alert-blue">
+            <IcoAlert size={19} style={{ flex: 'none' }} />
+            <div>
+              <b>Escolha a mesma conta em todos os aparelhos</b>
+              O Google vai perguntar uma vez só. Depois disso ele não pergunta
+              mais — o app passa a renovar a permissão sozinho, na mesma conta.
+            </div>
+          </div>
           <button className="btn btn-primary mt-14" disabled={conectando} onClick={async () => {
             setConectando(true);
             try {
-              await drive.conectar();
+              const conta = await drive.conectar();
               await atualizar();
               const r = await sincronizar({ avisando: true });
-              if (r?.ok) avisar('Drive conectado.');
+              if (r?.ok) avisar(conta ? `Conectado como ${conta}.` : 'Drive conectado.');
             } catch (e) {
               avisar(e?.message || 'Não consegui conectar ao Drive.');
             } finally {
@@ -326,6 +334,14 @@ function Sincronizacao({ avisar }) {
         <div className="kv">
           <span>Estado</span>
           <span className="tag tag-green">ligado</span>
+        </div>
+        {/* A conta escrita na tela evita o erro mais caro: ligar um aparelho
+            numa conta e o outro noutra, e achar que a sincronização quebrou. */}
+        <div className="kv">
+          <span>Conta</span>
+          <b style={{ fontSize: 13, wordBreak: 'break-all', textAlign: 'right' }}>
+            {info.conta || 'não identificada'}
+          </b>
         </div>
         <div className="kv">
           <span>Última sincronização</span>
@@ -351,6 +367,11 @@ function Sincronizacao({ avisar }) {
         Sincroniza sozinha ao abrir o app, ao voltar para ele e alguns segundos
         depois de cada lançamento. Os arquivos da gaveta não vão junto — são
         pesados demais; para eles, use o backup completo.
+      </p>
+      <p className="hint">
+        <b style={{ display: 'inline' }}>Use a mesma conta nos dois aparelhos.</b>{' '}
+        Cada conta tem o seu próprio Drive: em contas diferentes, cada aparelho
+        guarda o seu arquivo e nada atravessa de um para o outro.
       </p>
 
       <div className="stack-2">
