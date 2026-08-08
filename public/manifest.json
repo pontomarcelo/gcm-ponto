@@ -2,7 +2,7 @@
   "name": "GCM Ponto — Controle de Jornada da Guarda Municipal",
   "short_name": "GCM Ponto",
   "description": "Controle Inteligente de Jornada da Guarda Municipal. Funciona offline.",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
