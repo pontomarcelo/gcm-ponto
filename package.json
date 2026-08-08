@@ -1,0 +1,35 @@
+{
+  "name": "gcm-ponto",
+  "private": true,
+  "version": "1.0.0",
+  "description": "GCM Ponto - Controle Inteligente de Jornada da Guarda Municipal",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && gh-pages -d dist",
+    "teste": "node testes/auditoria.mjs",
+    "teste:fluxo": "npm run build && node testes/fluxo.mjs",
+    "teste:janelas": "npm run build && node testes/janelas.mjs",
+    "teste:telas": "npm run build && node testes/fechar-telas.mjs",
+    "teste:gaveta": "npm run build && node testes/gaveta.mjs",
+    "teste:backup": "node testes/backup-completo.mjs",
+    "teste:tudo": "npm run build && npm run teste && node testes/backup-completo.mjs && node testes/gaveta.mjs && node testes/janelas.mjs && node testes/fechar-telas.mjs && node testes/fluxo.mjs && cd testes && node css-regressoes.mjs",
+    "teste:css": "npm run build && cd testes && node css-regressoes.mjs"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "fake-indexeddb": "^6.2.5",
+    "gh-pages": "^6.2.0",
+    "jsdom": "^30.0.1",
+    "vite": "^5.4.11"
+  }
+}

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <title>GCM Ponto — Controle de Jornada</title>
+    <meta name="description" content="Controle Inteligente de Jornada da Guarda Municipal" />
+
+    <link rel="manifest" href="./manifest.json" />
+    <meta name="theme-color" content="#0B2545" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GCM Ponto" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+
+    <!-- O brasão é a primeira coisa a aparecer: carrega antes de tudo. -->
+    <link rel="preload" as="image" href="./logo/gcm-logo.png" />
+
+    <!--
+      As fontes entram sem bloquear a primeira pintura. O truque do media="print"
+      faz o navegador baixar em segundo plano e só aplicar quando chegar — assim
+      a tela aparece na hora, mesmo com internet ruim ou sem nenhuma.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+
+    <!-- Abertura desenhada em CSS puro: não espera JavaScript nenhum. -->
+    <style>
+      /* Só a abertura é azul-marinho. O fundo da página fica com o app —
+         html pintado de escuro vaza para baixo do conteúdo ao rolar. */
+      html, body { margin: 0; min-height: 100%; }
+      #abertura {
+        position: fixed; inset: 0; z-index: 999;
+        background: radial-gradient(120% 80% at 50% 0%, #164A86 0%, #0B2545 60%, #071B33 100%);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 18px; color: #fff; text-align: center; padding: 30px;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        transition: opacity .28s ease;
+      }
+      #abertura.saindo { opacity: 0; pointer-events: none; }
+      #abertura img {
+        width: 148px; height: 148px; object-fit: contain;
+        filter: drop-shadow(0 10px 26px rgba(0, 0, 0, .42));
+      }
+      #abertura h1 { font-size: 32px; font-weight: 800; letter-spacing: -.03em; margin: 0; }
+      #abertura p { color: rgba(255, 255, 255, .74); font-size: 14px; max-width: 300px; margin: 0; }
+      #abertura .barra {
+        width: 148px; height: 4px; border-radius: 999px;
+        background: rgba(255, 255, 255, .16); overflow: hidden; margin-top: 8px;
+      }
+      #abertura .barra i {
+        display: block; height: 100%; width: 40%; background: #D4AF37;
+        border-radius: 999px; animation: correr 1.1s ease-in-out infinite;
+      }
+      @keyframes correr {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(250%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #abertura .barra i { animation: none; width: 100%; }
+      }
+      #abertura .socorro { margin-top: 26px; max-width: 300px; animation: aparecer .4s ease; }
+      #abertura .socorro p { font-size: 13px; line-height: 1.5; margin: 0 0 14px; color: rgba(255, 255, 255, .8); }
+      #abertura .socorro button {
+        background: #D4AF37; color: #0B2545; border: 0; border-radius: 13px;
+        padding: 13px 20px; font-size: 14.5px; font-weight: 700; cursor: pointer;
+        font-family: inherit; width: 100%;
+      }
+      #abertura .socorro button:disabled { opacity: .6; }
+      #abertura .socorro pre {
+        background: rgba(0, 0, 0, .3); border-radius: 10px; padding: 10px 12px;
+        font-size: 11px; line-height: 1.45; color: #FFD9D9; text-align: left;
+        white-space: pre-wrap; word-break: break-all; margin: 0 0 14px;
+        max-height: 160px; overflow: auto;
+      }
+      #abertura .socorro strong { color: #FFB3B3; }
+      @keyframes aparecer { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+    </style>
+  </head>
+  <body>
+    <div id="abertura">
+      <img src="./logo/gcm-logo.png" alt="Brasão da Guarda Municipal de Itapajé" />
+      <h1>GCM Ponto</h1>
+      <p>Controle Inteligente da Jornada da Guarda Municipal</p>
+      <div class="barra"><i></i></div>
+    </div>
+
+    <div id="root"></div>
+
+    <!--
+      Rede de segurança.
+
+      Se o app não montar em 7 segundos, quase sempre é service worker antigo
+      preso no aparelho servindo arquivo velho. O guarda não tem como abrir
+      console para descobrir isso, então o próprio app oferece a limpeza:
+      remove os registros, apaga os caches e recarrega do zero.
+    -->
+    <script>
+      window.__gcmMontou = false;
+
+      /* Sem console no celular, erro silencioso vira tela travada e ninguém
+         descobre a causa. Aqui qualquer falha aparece escrita na tela. */
+      window.gcmMostrarErro = function (titulo, detalhe) {
+        var alvo = document.getElementById('abertura');
+        if (!alvo || document.getElementById('painel-erro')) return;
+        var caixa = document.createElement('div');
+        caixa.id = 'painel-erro';
+        caixa.className = 'socorro';
+        caixa.innerHTML =
+          '<p><strong>' + titulo + '</strong></p>' +
+          '<pre>' + String(detalhe).replace(/[<>&]/g, '') + '</pre>' +
+          '<button id="btn-recuperar" onclick="gcmRecuperar()">Limpar e abrir de novo</button>';
+        alvo.appendChild(caixa);
+      };
+
+      window.addEventListener('error', function (e) {
+        if (window.__gcmMontou) return;
+        var alvo = e.target;
+        // Falha ao BAIXAR um arquivo (script, css, imagem)
+        if (alvo && (alvo.tagName === 'SCRIPT' || alvo.tagName === 'LINK')) {
+          window.gcmMostrarErro('Não consegui baixar um arquivo do app',
+            (alvo.src || alvo.href || '').replace(location.origin, ''));
+          return;
+        }
+        window.gcmMostrarErro('Erro ao iniciar', (e.message || '') + '\n' + (e.filename || '').split('/').pop() + ':' + (e.lineno || ''));
+      }, true);
+
+      window.addEventListener('unhandledrejection', function (e) {
+        if (window.__gcmMontou) return;
+        window.gcmMostrarErro('Erro ao iniciar', (e.reason && (e.reason.message || e.reason)) || 'falha desconhecida');
+      });
+
+      window.gcmRecuperar = function () {
+        var botao = document.getElementById('btn-recuperar');
+        if (botao) { botao.disabled = true; botao.textContent = 'Limpando…'; }
+
+        var tarefas = [];
+
+        if ('serviceWorker' in navigator) {
+          tarefas.push(
+            navigator.serviceWorker.getRegistrations()
+              .then(function (regs) { return Promise.all(regs.map(function (r) { return r.unregister(); })); })
+              .catch(function () {})
+          );
+        }
+        if (window.caches && caches.keys) {
+          tarefas.push(
+            caches.keys()
+              .then(function (chaves) { return Promise.all(chaves.map(function (c) { return caches.delete(c); })); })
+              .catch(function () {})
+          );
+        }
+
+        Promise.all(tarefas).then(function () {
+          // O parâmetro quebra qualquer cache de navegação que tenha sobrado.
+          location.replace(location.pathname + '?limpo=' + Date.now());
+        });
+      };
+
+      /* A abertura some sozinha assim que o app desenha alguma coisa.
+         Antes ela dependia do main.jsx mandar sumir — e se aquele arquivo
+         não subisse junto, a tela ficava coberta para sempre com o app
+         funcionando invisível por baixo. Enfeite nunca pode bloquear o app. */
+      (function () {
+        function sumir() {
+          var alvo = document.getElementById('abertura');
+          if (!alvo) return;
+          window.__gcmMontou = true;
+          alvo.classList.add('saindo');
+          setTimeout(function () { if (alvo.parentNode) alvo.remove(); }, 300);
+        }
+
+        var vigia = setInterval(function () {
+          var raiz = document.getElementById('root');
+          if (raiz && raiz.children.length > 0) {
+            clearInterval(vigia);
+            sumir();
+          }
+        }, 100);
+
+        // Desiste de vigiar depois de 20s: aí o problema é outro.
+        setTimeout(function () { clearInterval(vigia); }, 20000);
+      })();
+
+      setTimeout(function () {
+        if (window.__gcmMontou) return;
+        var alvo = document.getElementById('abertura');
+        if (!alvo) return;
+        var aviso = document.createElement('div');
+        aviso.className = 'socorro';
+        aviso.innerHTML =
+          '<p>O app está demorando mais que o normal.<br>Isso costuma ser uma versão antiga presa no aparelho.</p>' +
+          '<button id="btn-recuperar" onclick="gcmRecuperar()">Limpar e abrir de novo</button>';
+        alvo.appendChild(aviso);
+      }, 7000);
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
