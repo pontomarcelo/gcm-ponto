@@ -85,6 +85,20 @@ await db.apagarTudo();
 conf('lançamentos zerados', (await db.listarLancamentos()).length === 0);
 conf('lápides zeradas', (await db.listarExcluidos()).length === 0);
 
+console.log('\n── O GOOGLE NÃO PODE PERGUNTAR A CONTA TODA HORA ────────────');
+
+/* Com cinco contas logadas no navegador, o Google abre a lista de contas a cada
+   renovação de permissão — de hora em hora — se o app não disser qual usar.
+   Estas três linhas são o que mantém a renovação silenciosa. */
+const fsD = await import('node:fs');
+const dv = fsD.readFileSync(new URL('../src/services/drive.js', import.meta.url), 'utf8');
+conf('o app avisa ao Google qual conta usar', /hint: conta \|\| undefined/.test(dv));
+conf('e não abre o seletor de contas', /select_account: false/.test(dv));
+conf('a conta escolhida fica guardada', /setConfig\('driveConta', conta\)/.test(dv));
+conf('desconectar limpa a conta guardada', /setConfig\('driveConta', null\)/.test(dv));
+conf('a tela de permissão só aparece sem conta conhecida',
+  /prompt: \(interativo && !conta\)/.test(dv));
+
 console.log('\n── O CACHE NÃO PODE ENGOLIR O DRIVE ─────────────────────────');
 
 /* O service worker guarda tudo em cache. Se guardar também a resposta do
