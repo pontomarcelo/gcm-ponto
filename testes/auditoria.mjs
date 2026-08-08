@@ -1,5 +1,6 @@
 import { calcularCompetencia, duracaoHoras, somarDias, diasDeVirada, alertaExtras,
   TIPOS, tipoPorId, horasCurto, competenciaDe, estatisticas, faixaHoraria,
+  periodoDaCompetencia, diasDaCompetencia, periodoCurto, serieDiaria,
   CARGA_MENSAL, LIMITE_EXTRA } from '../src/services/calc.js';
 
 let ok = 0, falhou = 0;
@@ -82,7 +83,43 @@ console.log('\n── ORDEM E RECÁLCULO ─────────────
   t('excluir lançamento antigo recalcula o mês', semUm.totalExtras, 0); }
 
 console.log('\n── DIVERSOS ─────────────────────────────────────────────────');
-t('competência pela data de entrada', competenciaDe('2026-07-31'), '2026-07');
+console.log('\n── COMPETÊNCIA 21→20 ────────────────────────────────────────');
+t('dia 20 ainda é do mês corrente', competenciaDe('2026-08-20'), '2026-08');
+t('dia 21 já pertence ao mês seguinte', competenciaDe('2026-07-21'), '2026-08');
+t('dia 31 pertence ao mês seguinte', competenciaDe('2026-07-31'), '2026-08');
+t('dia 1º é do próprio mês', competenciaDe('2026-08-01'), '2026-08');
+t('virada de ano: 21/12 vai para janeiro', competenciaDe('2026-12-21'), '2027-01');
+t('virada de ano: 20/01 fica em janeiro', competenciaDe('2027-01-20'), '2027-01');
+t('fevereiro bissexto: 29/02 vai para março', competenciaDe('2028-02-29'), '2028-03');
+t('período de agosto/2026', periodoDaCompetencia('2026-08'), { inicio: '2026-07-21', fim: '2026-08-20' });
+t('período de janeiro atravessa o ano', periodoDaCompetencia('2027-01'), { inicio: '2026-12-21', fim: '2027-01-20' });
+t('agosto/2026 tem 31 dias na janela', diasDaCompetencia('2026-08').length, 31);
+t('a janela começa no 21 e termina no 20',
+  [diasDaCompetencia('2026-08')[0], diasDaCompetencia('2026-08').at(-1)], ['2026-07-21', '2026-08-20']);
+t('março/2026 pega o fevereiro curto', diasDaCompetencia('2026-03').length, 28);
+t('período em texto curto', periodoCurto('2026-08'), '21/07 a 20/08');
+
+/* O serviço do dia 21 é extra convocada e cai no mês seguinte: as duas regras
+   valendo ao mesmo tempo, que é onde erro passa despercebido. */
+{
+  const julho = [L({ id: 'a', data: '2026-07-15', entrada: '07:00', saida: '19:00' })];
+  const agosto = [
+    L({ id: 'b', data: '2026-07-21', entrada: '07:00', saida: '19:00' }),
+    L({ id: 'c', data: '2026-08-20', entrada: '07:00', saida: '19:00' })
+  ];
+  t('lançamento do dia 15 fica em julho', competenciaDe('2026-07-15'), '2026-07');
+  t('julho isolado soma 12h', calcularCompetencia(julho).total, 12);
+  t('21/07 e 20/08 caem na mesma competência',
+    [competenciaDe('2026-07-21'), competenciaDe('2026-08-20')], ['2026-08', '2026-08']);
+  t('agosto soma os dois dias', calcularCompetencia(agosto).total, 24);
+  t('gráfico cobre a janela inteira',
+    serieDiaria(calcularCompetencia(agosto), '2026-08').length, 31);
+  const serie = serieDiaria(calcularCompetencia(agosto), '2026-08');
+  t('gráfico começa no dia 21 com 12h', [serie[0].dia, serie[0].normais], [21, 12]);
+  t('gráfico termina no dia 20 com 12h', [serie.at(-1).dia, serie.at(-1).normais], [20, 12]);
+}
+
+console.log('\n── DIVERSOS ─────────────────────────────────────────────────');
 t('faixa mostra virada de dia', faixaHoraria({entrada:'07:00',saida:'07:00',data:'2026-08-01',dataSaida:'2026-08-02'}), '07:00 — 07:00 (+1d)');
 t('mês vazio não quebra', calcularCompetencia([]).total, 0);
 t('estatísticas de mês vazio', estatisticas(calcularCompetencia([])).media, 0);
