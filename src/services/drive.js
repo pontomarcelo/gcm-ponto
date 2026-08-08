@@ -26,12 +26,15 @@ import {
 export const CLIENT_ID_PADRAO =
   '618176113793-28fqt6kapivpgv66qqg3tcjdce4mrnej.apps.googleusercontent.com';
 
-/* Dois escopos, os dois "não sensíveis":
-   - drive.file: só o arquivo que o app cria. Não vê nada mais do Drive.
-   - userinfo.email: só para SABER qual conta foi escolhida, e poder pedir ao
-     Google que renove sempre nela. Sem isso ele abre a lista de contas a cada
-     renovação, de hora em hora. */
-const ESCOPO = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+/* Uma permissão só, e das leves: o app enxerga apenas o arquivo que ele mesmo
+   criou. Não vê foto, não vê documento, não vê mais nada do Drive.
+   
+   Chegamos a pedir também a permissão de ler o e-mail, para saber qual conta
+   foi escolhida. Era permissão a mais para pouca coisa, e o Google não a
+   concedia sem declaração no console — a conta aparecia como "não
+   identificada". O próprio Drive responde quem é o dono, então voltou a ser
+   uma permissão só. */
+const ESCOPO = 'https://www.googleapis.com/auth/drive.file';
 
 /**
  * Para onde o Google devolve o guarda depois de autorizar. Precisa bater
@@ -107,14 +110,19 @@ export const setConectado = (v) => setConfig('driveLigado', !!v);
 /** O e-mail da conta escolhida. É o que evita a pergunta a cada renovação. */
 export const contaConectada = () => getConfig('driveConta', null);
 
-/** Pergunta ao Google qual conta autorizou. Falhar aqui não impede nada. */
+/**
+ * Pergunta ao próprio Drive de quem é a conta. Não custa permissão nenhuma
+ * além da que o app já tem. Falhar aqui não impede a sincronização — só deixa
+ * a conta sem nome na tela.
+ */
 async function descobrirConta(t) {
   try {
-    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${t}` }
-    });
+    const r = await fetch(
+      'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',
+      { headers: { Authorization: `Bearer ${t}` } }
+    );
     if (!r.ok) return null;
-    return (await r.json())?.email || null;
+    return (await r.json())?.user?.emailAddress || null;
   } catch {
     return null;
   }
@@ -224,11 +232,25 @@ async function pedirToken({ interativo }) {
         scope: ESCOPO,
         hint: conta || undefined,
         select_account: false,
-        callback: () => {}
+        callback: () => {},
+        /* Sem isto, janelinha bloqueada = silêncio absoluto, e o app espera
+           para sempre. Com isto, vira um erro que dá para mostrar na tela. */
+        error_callback: (e) => reject(new Error(
+          e?.type === 'popup_failed_to_open'
+            ? 'O navegador bloqueou a janela do Google. Toque em "Reconectar ao Drive".'
+            : 'A autorização do Google não foi concluída. Tente de novo.'
+        ))
       });
       clienteConta = conta;
     }
+
+    /* Rede de segurança: se nada responder em 25 segundos, desiste. Melhor uma
+       mensagem de erro que o guarda entende do que um botão preso para sempre. */
+    const desistir = setTimeout(() => reject(new Error(
+      'O Google não respondeu. Verifique a internet e tente de novo.'
+    )), 25000);
     clienteToken.callback = (resposta) => {
+      clearTimeout(desistir);
       if (resposta?.error) {
         reject(new Error(
           resposta.error === 'access_denied'
@@ -249,6 +271,13 @@ async function pedirToken({ interativo }) {
 
 async function garantirToken({ interativo = false } = {}) {
   if (temToken()) return token;
+
+  /* No app instalado NÃO se tenta a janelinha: ela é bloqueada, e o Google
+     não responde nem com erro — o app ficaria esperando para sempre, travado
+     em "Sincronizando…". Aqui ele desiste na hora e diz o que fazer. */
+  if (ehAppInstalado()) {
+    throw new Error('A permissão do Google venceu. Toque em "Reconectar ao Drive".');
+  }
   return pedirToken({ interativo });
 }
 
@@ -386,6 +415,13 @@ export async function sincronizar({ interativo = false } = {}) {
       }
 
       const idFinal = mudou(remoto, junto) ? await subir(id, junto) : id;
+
+      /* A conta pode não ter sido descoberta na conexão — por falha de rede,
+         por exemplo. Aqui há um token válido em mãos: aproveita e resolve. */
+      if (!(await contaConectada())) {
+        const conta = await descobrirConta(token);
+        if (conta) await setConfig('driveConta', conta);
+      }
 
       const quando = Date.now();
       await setConfig('driveUltimaSync', quando);
