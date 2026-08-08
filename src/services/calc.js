@@ -85,15 +85,61 @@ export const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho'
 export const MESES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 export const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
-/** 'YYYY-MM-DD' -> 'YYYY-MM' */
-export const competenciaDe = (data) => (data || '').slice(0, 7);
+/**
+ * A competência da Guarda NÃO é o mês do calendário.
+ *
+ * Ela vai do dia 21 de um mês ao dia 20 do mês seguinte, e leva o nome do mês
+ * em que TERMINA. Ou seja: 21/07 a 20/08 é a competência de Agosto de 2026.
+ *
+ * Consequência prática: um serviço lançado no dia 21 já pertence ao mês
+ * seguinte. É o carimbo que manda, não o calendário na parede.
+ */
+export const DIA_VIRADA = 21;
 
-export const hojeISO = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const compISO = (ano, mes) => `${ano}-${String(mes).padStart(2, '0')}`;
+
+const dataISO = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** 'YYYY-MM-DD' -> competência 'YYYY-MM' pela regra 21→20. */
+export const competenciaDe = (data) => {
+  if (!data) return '';
+  const [ano, mes, dia] = data.split('-').map(Number);
+  if (!ano || !mes || !dia) return (data || '').slice(0, 7);
+  if (dia < DIA_VIRADA) return compISO(ano, mes);
+  return mes === 12 ? compISO(ano + 1, 1) : compISO(ano, mes + 1);
 };
 
-export const competenciaAtual = () => hojeISO().slice(0, 7);
+export const hojeISO = () => dataISO(new Date());
+
+export const competenciaAtual = () => competenciaDe(hojeISO());
+
+/** Primeiro e último dia da competência: 21 do mês anterior a 20 deste. */
+export function periodoDaCompetencia(comp) {
+  const [ano, mes] = comp.split('-').map(Number);
+  return {
+    inicio: dataISO(new Date(ano, mes - 2, DIA_VIRADA)),
+    fim: dataISO(new Date(ano, mes - 1, DIA_VIRADA - 1))
+  };
+}
+
+/** Todos os dias da competência, em ordem — atravessa a virada do mês. */
+export function diasDaCompetencia(comp) {
+  const { inicio, fim } = periodoDaCompetencia(comp);
+  const dias = [];
+  let d = inicio;
+  while (d <= fim) {
+    dias.push(d);
+    d = somarDias(d, 1);
+  }
+  return dias;
+}
+
+/** '21/07 a 20/08' — para o guarda saber que janela está vendo. */
+export function periodoCurto(comp) {
+  const { inicio, fim } = periodoDaCompetencia(comp);
+  return `${inicio.slice(8, 10)}/${inicio.slice(5, 7)} a ${fim.slice(8, 10)}/${fim.slice(5, 7)}`;
+}
 
 export const nomeCompetencia = (comp) => {
   if (!comp) return '';
@@ -377,16 +423,21 @@ export function estatisticas(resumo) {
   };
 }
 
-/** Série diária de horas do mês, para o gráfico do dashboard. */
+/**
+ * Série diária de horas, para o gráfico do dashboard.
+ * Vai do dia 21 ao dia 20, na ordem em que o guarda viveu o mês — por isso
+ * é indexada pela data inteira, e não pelo número do dia.
+ */
 export function serieDiaria(resumo, competencia) {
-  const [ano, mes] = competencia.split('-').map(Number);
-  const dias = new Date(ano, mes, 0).getDate();
-  const serie = Array.from({ length: dias }, (_, i) => ({ dia: i + 1, normais: 0, extras: 0 }));
+  const serie = diasDaCompetencia(competencia).map((data) => ({
+    data, dia: Number(data.slice(8, 10)), normais: 0, extras: 0
+  }));
+  const porData = new Map(serie.map((s) => [s.data, s]));
   resumo.itens.forEach((i) => {
-    const d = Number(i.data.slice(8, 10)) - 1;
-    if (serie[d]) {
-      serie[d].normais = arred(serie[d].normais + i.horasNormais);
-      serie[d].extras = arred(serie[d].extras + i.horasExtras);
+    const s = porData.get(i.data);
+    if (s) {
+      s.normais = arred(s.normais + i.horasNormais);
+      s.extras = arred(s.extras + i.horasExtras);
     }
   });
   return serie;
