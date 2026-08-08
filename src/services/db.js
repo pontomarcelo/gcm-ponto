@@ -10,7 +10,7 @@
  */
 
 const DB_NAME = 'gcm-ponto';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let _db = null;
 
@@ -39,6 +39,11 @@ export function openDB() {
       if (!db.objectStoreNames.contains('documentos')) {
         const s = db.createObjectStore('documentos', { keyPath: 'id' });
         s.createIndex('competencia', 'competencia', { unique: false });
+      }
+      /* Lápides: id do lançamento apagado e quando foi. Sem isso, um registro
+         excluído no celular voltaria do Drive na abertura seguinte. */
+      if (!db.objectStoreNames.contains('excluidos')) {
+        db.createObjectStore('excluidos', { keyPath: 'id' });
       }
     };
 
@@ -79,7 +84,60 @@ export const savePerfil = (dados) => put('perfil', { ...dados, id: 'me', atualiz
 export const listarLancamentos = () => all('lancamentos');
 export const listarPorCompetencia = (competencia) => byIndex('lancamentos', 'competencia', competencia);
 export const salvarLancamento = (l) => put('lancamentos', l);
-export const excluirLancamento = (id) => del('lancamentos', id);
+
+/**
+ * Excluir deixa lápide. É ela que leva a exclusão para o outro aparelho —
+ * a simples ausência do registro não serve, porque o outro lado não teria
+ * como saber se foi apagado ou se ainda não chegou lá.
+ */
+export async function excluirLancamento(id) {
+  await del('lancamentos', id);
+  await put('excluidos', { id, em: Date.now() });
+}
+
+export const listarExcluidos = () => all('excluidos');
+
+/* --------------------------------------------------- Sincronização (Drive) */
+
+/** O retrato deste aparelho, no formato que a junção espera. */
+export async function exportarParaSincronizar() {
+  const [perfil, lancamentos, competencias, excluidos] = await Promise.all([
+    getPerfil(), all('lancamentos'), all('competencias'), all('excluidos')
+  ]);
+  return { perfil: perfil || null, lancamentos, competencias, excluidos };
+}
+
+/**
+ * Grava no aparelho o resultado da junção.
+ *
+ * Substitui as três coleções de uma vez, dentro de uma transação só: ou entra
+ * tudo, ou não entra nada. Meio caminho aqui significaria mês com hora faltando.
+ *
+ * A gaveta de arquivos NÃO entra na sincronização — são fotos e PDFs, pesados
+ * demais para trafegar a cada abertura. Continuam no backup completo.
+ */
+export async function aplicarSincronizado({ perfil, lancamentos = [], competencias = [], excluidos = [] }) {
+  const db = await openDB();
+  const stores = ['perfil', 'lancamentos', 'competencias', 'excluidos'];
+
+  await new Promise((resolve, reject) => {
+    const t = db.transaction(stores, 'readwrite');
+    t.oncomplete = resolve;
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error);
+
+    t.objectStore('lancamentos').clear();
+    lancamentos.forEach((l) => t.objectStore('lancamentos').put(l));
+
+    t.objectStore('competencias').clear();
+    competencias.forEach((c) => t.objectStore('competencias').put(c));
+
+    t.objectStore('excluidos').clear();
+    excluidos.forEach((e) => t.objectStore('excluidos').put(e));
+
+    if (perfil) t.objectStore('perfil').put({ ...perfil, id: 'me' });
+  });
+}
 
 /* ---------------------------------------------------------- Competências */
 
@@ -160,5 +218,5 @@ export async function importarTudo(dump, { substituir = false } = {}) {
 }
 
 export async function apagarTudo() {
-  await Promise.all(['perfil', 'lancamentos', 'competencias', 'config', 'documentos'].map(clear));
+  await Promise.all(['perfil', 'lancamentos', 'competencias', 'config', 'documentos', 'excluidos'].map(clear));
 }
