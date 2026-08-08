@@ -11,8 +11,15 @@ import autoTableRaw from 'jspdf-autotable';
 const autoTable = typeof autoTableRaw === 'function' ? autoTableRaw : autoTableRaw.default;
 import {
   CARGA_MENSAL, LIMITE_EXTRA, formatarData, horasParaHHMM, horasCurto,
-  nomeCompetencia, tipoPorId, DIAS_SEMANA, diaSemana, faixaHoraria
+  nomeCompetencia, tipoPorId, DIAS_SEMANA, diaSemana, faixaHoraria, periodoDaCompetencia
 } from './calc.js';
+
+/** '21/07/2026 a 20/08/2026' — a janela real que o relatório apura. */
+function periodoPorExtenso(competencia) {
+  const { inicio, fim } = periodoDaCompetencia(competencia);
+  const br = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+  return `${br(inicio)} a ${br(fim)}`;
+}
 
 const NAVY = [11, 37, 69];
 const GOLD = [176, 141, 30];
@@ -100,7 +107,9 @@ export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatur
     ['Matrícula', perfil?.matricula || '—'],
     ['Município', perfil?.municipio || '—'],
     ['Unidade', perfil?.unidade || '—'],
-    ['Competência', nomeCompetencia(competencia)]
+    ['Competência', nomeCompetencia(competencia)],
+    // O comando precisa ler no papel que o mês não é o do calendário.
+    ['Período apurado', periodoPorExtenso(competencia)]
   ];
   doc.setFontSize(9);
   campos.forEach(([k, v], i) => {
