@@ -52,9 +52,12 @@ async function carregarImagem(url) {
  * @param {string} p.competencia   'YYYY-MM'
  * @param {object} p.resumo        saída de calcularCompetencia()
  * @param {object|null} p.assinatura { metodo, selo, selfie, assinadoEm }
+ * @param {object|null} p.fecho      { cidade, data, comandante } — o fecho do
+ *   documento: "Itapajé, 8 de agosto de 2026." acima das assinaturas, e o nome
+ *   de quem recebe sobre a linha do Comando.
  * @returns {Promise<{blob: Blob, nomeArquivo: string, doc: jsPDF}>}
  */
-export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatura = null, logoUrl = './logo/gcm-logo-pdf.png' }) {
+export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatura = null, fecho = null, logoUrl = './logo/gcm-logo-pdf.png' }) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const L = 15;                        // margem esquerda
   const W = doc.internal.pageSize.getWidth();
@@ -122,7 +125,12 @@ export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatur
     doc.text(`${k}:`, x, yy);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...NAVY);
-    doc.text(String(v), x + 24, yy);
+    /* O valor começa depois do rótulo, com folga — antes era uma distância
+       fixa, e "Período apurado:" grudava no valor por ser mais comprido. */
+    doc.setFont('helvetica', 'normal');
+    const larguraRotulo = doc.getTextWidth(`${k}:`);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(v), x + Math.max(24, larguraRotulo + 2.5), yy);
   });
   y += Math.ceil(campos.length / 2) * 6.5 + 4;
 
@@ -350,7 +358,20 @@ export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatur
     y += 12;
   }
 
-  y = Math.max(y, H - 42);
+  /* Local e data acima das assinaturas, como manda o costume de documento
+     oficial. Fica em branco quando o guarda não preencheu. */
+  y = Math.max(y, H - 56);
+  if (fecho?.cidade || fecho?.data) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...NAVY);
+    const partes = [fecho?.cidade, fecho?.data].filter(Boolean);
+    doc.text(`${partes.join(', ')}.`, R, y, { align: 'right' });
+  }
+
+  /* Folga entre o fecho e a linha de assinatura. Colados, os dois viram um
+     bloco só e o olho não separa a data do nome de quem assina. */
+  y += 16;
   doc.setDrawColor(120, 132, 150);
   doc.setLineWidth(0.3);
   doc.line(L + 12, y, L + 82, y);
@@ -359,8 +380,8 @@ export async function gerarRelatorioPDF({ perfil, competencia, resumo, assinatur
   doc.setTextColor(...GRAY);
   doc.text(perfil?.nome || 'Agente', L + 47, y + 4.5, { align: 'center' });
   doc.text(`Matrícula ${perfil?.matricula || '—'}`, L + 47, y + 8.5, { align: 'center' });
-  doc.text('Comando da Guarda Municipal', R - 47, y + 4.5, { align: 'center' });
-  doc.text('Visto', R - 47, y + 8.5, { align: 'center' });
+  doc.text(fecho?.comandante || 'Comando da Guarda Municipal', R - 47, y + 4.5, { align: 'center' });
+  doc.text(fecho?.comandante ? 'Comando da Guarda Municipal' : 'Visto', R - 47, y + 8.5, { align: 'center' });
 
   /* -------------------------------------------------------------- Rodapé */
   const paginas = doc.internal.getNumberOfPages();
