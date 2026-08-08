@@ -64,11 +64,16 @@ conf('termômetro em zona tranquila', d.querySelector('.termo-estado')?.textCont
 
 clique(nav('Calendário')); await esperar(450);
 conf('calendário renderizou o mês', d.querySelectorAll('.cal-day').length > 27);
-conf('calendário mostra a janela 21→20, não o mês do calendário',
+conf('calendário mostra o mês do calendário inteiro',
   d.querySelectorAll('.cal-day:not(.empty)').length === 31);
-conf('a janela começa no dia 21',
-  d.querySelector('.cal-day:not(.empty)')?.textContent.trim().startsWith('21'));
-conf('cabeçalho do calendário mostra o período', d.body.textContent.includes('21/07 a 20/08'));
+conf('a grade começa no dia 1',
+  d.querySelector('.cal-day:not(.empty)')?.textContent.trim().startsWith('1'));
+conf('só o dia 21 abre a competência', d.querySelectorAll('.cal-day.abre').length === 1);
+conf('só o dia 20 fecha a competência', d.querySelectorAll('.cal-day.fecha').length === 1);
+conf('o dia 1º não marca fronteira nenhuma', d.querySelectorAll('.cal-tag').length === 2);
+conf('o dia 20 diz FIM', [...d.querySelectorAll('.cal-day.fecha .cal-tag')][0]?.textContent === 'fim');
+conf('mostra para onde vai cada metade do mês', d.body.textContent.includes('Para onde vão estes dias'));
+conf('metade final do mês aponta para setembro', d.body.textContent.includes('Setembro de 2026'));
 conf('calendário com dia de diária em azul', !!d.querySelector('.cal-day.fora'));
 clique(nav('Histórico')); await esperar(450);
 conf('histórico listou os 4 lançamentos', d.querySelectorAll('.item').length >= 4);
