@@ -534,8 +534,8 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   .screen { max-width: 700px; padding: 0 28px calc(112px + var(--safe-bottom)); }
   .onboard { max-width: 480px; }
 
-  .quick { gap: 14px; }
-  .quick button { padding: 18px 8px; font-size: 12.5px; }
+  .quick { grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .quick button { padding: 18px 6px; font-size: 12px; }
 
   .sheet {
     max-width: 620px;
@@ -608,7 +608,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   /* Com largura sobrando, o mês inteiro cabe sem rolagem. */
   .grid-2 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
-  .quick { grid-template-columns: repeat(4, 1fr); max-width: 620px; }
+  .quick { grid-template-columns: repeat(5, 1fr); max-width: 720px; }
   .metric .v { font-size: 24px; }
   .chart { height: 200px; }
 
