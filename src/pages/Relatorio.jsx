@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { TopBar, Sheet } from '../components/UI.jsx';
 import {
-  CARGA_MENSAL, LIMITE_EXTRA, horasCurto, nomeCompetencia, competenciaAtual, periodoCurto
+  CARGA_MENSAL, LIMITE_EXTRA, horasCurto, nomeCompetencia, competenciaAtual,
+  periodoCurto, hojeISO, MESES
 } from '../services/calc.js';
+import { getConfig, setConfig } from '../services/db.js';
 import { compartilharPDF, baixarArquivo, abrirWhatsApp, abrirEmail, imprimirPDF } from '../services/share.js';
 import { baixarBackupCompleto } from '../services/backup.js';
 import {
@@ -12,8 +14,15 @@ import {
 } from '../services/auth.js';
 import {
   IcoLock, IcoCamera, IcoFinger, IcoShare, IcoDownload, IcoPrint, IcoMail,
-  IcoWhatsApp, IcoCheck, IcoDoc, IcoAlert, IcoShield
+  IcoWhatsApp, IcoCheck, IcoDoc, IcoAlert, IcoShield, IcoChevron
 } from '../components/Icons.jsx';
+
+/** '8 de agosto de 2026' — o formato de fecho de documento oficial.
+    O formato do resto do app traz o dia da semana, que aqui não cabe. */
+const dataDeFecho = (iso) => {
+  const [a, m, d] = iso.split('-').map(Number);
+  return `${d} de ${MESES[m - 1].toLowerCase()} de ${a}`;
+};
 
 export default function Relatorio({ voltar }) {
   const {
@@ -29,6 +38,23 @@ export default function Relatorio({ voltar }) {
   /* Aviso de backup: aparece logo depois de fechar a competência. É o momento
      em que o mês virou prova — se o celular sumir agora, some com ele. */
   const [pedindoBackup, setPedindoBackup] = useState(false);
+
+  /* Fecho do documento: cidade, data e o nome de quem recebe. Fica guardado
+     entre um mês e outro — o comandante costuma ser o mesmo, e redigitar todo
+     mês é o tipo de atrito que faz o guarda deixar o campo em branco. */
+  const [fecho, setFecho] = useState(null);
+  const [editandoFecho, setEditandoFecho] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const guardado = await getConfig('fechoDocumento', null);
+      setFecho(guardado || {
+        cidade: perfil?.municipio || '',
+        data: dataDeFecho(hojeISO()),
+        comandante: ''
+      });
+    })();
+  }, [perfil]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [progressoBackup, setProgressoBackup] = useState(null);
 
   const assinatura = fechamento?.assinatura || null;
@@ -39,7 +65,7 @@ export default function Relatorio({ voltar }) {
     try {
       // O jsPDF só é baixado neste momento — mantém a abertura do app leve.
       const { gerarRelatorioPDF } = await import('../services/pdf.js');
-      const r = await gerarRelatorioPDF({ perfil, competencia, resumo, assinatura });
+      const r = await gerarRelatorioPDF({ perfil, competencia, resumo, assinatura, fecho });
       setPdf(r);
       return r;
     } catch (e) {
@@ -161,8 +187,26 @@ export default function Relatorio({ voltar }) {
           )}
         </div>
 
+        {/* ------------------------------------------------------ Fecho */}
+        <div className="section-title">3. Fecho do documento</div>
+        <button className="item" style={{ width: '100%' }} onClick={() => setEditandoFecho(true)}>
+          <div className="item-main">
+            <div className="t">
+              {fecho?.cidade || fecho?.data
+                ? `${[fecho?.cidade, fecho?.data].filter(Boolean).join(', ')}.`
+                : 'Local e data'}
+            </div>
+            <div className="s">{fecho?.comandante || 'Sem o nome de quem recebe'}</div>
+          </div>
+          <div style={{ color: 'var(--muted)' }}><IcoChevron size={16} /></div>
+        </button>
+        <p className="hint">
+          Aparece acima das assinaturas, como manda o costume. Fica guardado
+          para os próximos meses — não precisa digitar de novo.
+        </p>
+
         {/* -------------------------------------------------------- PDF */}
-        <div className="section-title">3. Gerar e enviar</div>
+        <div className="section-title">4. Gerar e enviar</div>
         <div className="card">
           <button className="btn btn-navy" onClick={() => comPdf((r) => avisar(`PDF pronto: ${r.nomeArquivo}`))} disabled={gerando}>
             <IcoDoc size={18} /> {gerando ? 'Gerando…' : pdf ? 'PDF gerado' : 'Gerar PDF'}
@@ -223,6 +267,46 @@ export default function Relatorio({ voltar }) {
             sincronizar();
           }}>Confirmar fechamento</button>
           <button className="btn btn-ghost mt-14" onClick={() => setConfirmandoFechar(false)}>Cancelar</button>
+        </Sheet>
+      )}
+
+      {editandoFecho && fecho && (
+        <Sheet titulo="Fecho do documento" subtitulo="Aparece acima das assinaturas, no pé do relatório."
+          fechar={() => setEditandoFecho(false)}>
+          <div className="field">
+            <label htmlFor="fechoCidade">Cidade</label>
+            <input id="fechoCidade" className="input" value={fecho.cidade}
+              onChange={(e) => setFecho({ ...fecho, cidade: e.target.value })}
+              placeholder="Itapajé" />
+          </div>
+          <div className="field">
+            <label htmlFor="fechoData">Data</label>
+            <input id="fechoData" className="input" value={fecho.data}
+              onChange={(e) => setFecho({ ...fecho, data: e.target.value })}
+              placeholder="8 de agosto de 2026" />
+          </div>
+          <div className="field">
+            <label htmlFor="fechoComandante">Quem recebe</label>
+            <input id="fechoComandante" className="input" value={fecho.comandante}
+              onChange={(e) => setFecho({ ...fecho, comandante: e.target.value })}
+              placeholder="Nome do comandante" />
+          </div>
+          <p className="hint">
+            O nome vai sobre a linha da direita, e embaixo dele fica escrito
+            "Comando da Guarda Municipal". Deixando em branco, sai só "Visto".
+          </p>
+          <button className="btn btn-primary mt-14" onClick={async () => {
+            await setConfig('fechoDocumento', fecho);
+            setPdf(null);   /* o PDF em memória ficou velho: refazer ao enviar */
+            setEditandoFecho(false);
+            avisar('Fecho salvo.');
+          }}>Salvar</button>
+          <button className="btn btn-ghost mt-14" onClick={async () => {
+            const hoje = { cidade: perfil?.municipio || '', data: dataDeFecho(hojeISO()), comandante: fecho.comandante };
+            setFecho(hoje);
+            await setConfig('fechoDocumento', hoje);
+            avisar('Data atualizada para hoje.');
+          }}>Usar a data de hoje</button>
         </Sheet>
       )}
 
