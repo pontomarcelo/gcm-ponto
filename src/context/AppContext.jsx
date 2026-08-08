@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import * as db from '../services/db.js';
+import * as drive from '../services/drive.js';
 import {
   calcularCompetencia, competenciaAtual, competenciaDe, estatisticas, novoId
 } from '../services/calc.js';
@@ -35,6 +36,9 @@ export function AppProvider({ children }) {
   const [competencia, setCompetencia] = useState(competenciaAtual());
   const [tema, setTema] = useState('light');
   const [toast, setToast] = useState(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [ultimaSync, setUltimaSync] = useState(null);
+  const agendado = useRef(null);
 
   /* --------------------------------------------------------- Carga inicial */
   useEffect(() => {
@@ -66,6 +70,51 @@ export function AppProvider({ children }) {
     setTimeout(() => setToast((t) => (t === texto ? null : t)), 2800);
   }, []);
 
+  const recarregar = useCallback(async () => {
+    const [p, l, c] = await Promise.all([db.getPerfil(), db.listarLancamentos(), db.listarCompetencias()]);
+    setPerfil(p || null);
+    setLancamentos(l || []);
+    setFechamentos(c || []);
+  }, []);
+
+  /* ---------------------------------------------------- Sincronização */
+
+  /**
+   * Sincroniza com o Drive e recarrega a tela se veio novidade.
+   *
+   * Falhar aqui NUNCA pode atrapalhar o guarda: sem internet, o app segue
+   * funcionando offline como sempre. Por isso a versão automática é muda —
+   * só avisa quando ele mesmo pediu, apertando o botão.
+   */
+  const sincronizar = useCallback(async ({ avisando = false } = {}) => {
+    if (!(await drive.conectado())) return null;
+    setSincronizando(true);
+    try {
+      const r = await drive.sincronizar({ interativo: avisando });
+      if (r.ok) {
+        if (r.mudouAqui) await recarregar();
+        setUltimaSync(r.quando);
+        if (avisando) {
+          avisar(r.baixados > 0
+            ? `Sincronizado. ${r.baixados} lançamento(s) vieram do outro aparelho.`
+            : 'Tudo sincronizado.');
+        }
+      } else if (avisando) {
+        avisar(r.erro);
+      }
+      return r;
+    } finally {
+      setSincronizando(false);
+    }
+  }, [recarregar, avisar]);
+
+  /* Depois de mexer nos dados, espera o guarda parar de digitar e sobe. Se ele
+     lançar três jornadas seguidas, sobe uma vez só, no fim. */
+  const agendarSync = useCallback(() => {
+    clearTimeout(agendado.current);
+    agendado.current = setTimeout(() => { sincronizar(); }, 4000);
+  }, [sincronizar]);
+
   /* -------------------------------------------------------------- Ações */
 
   const salvarPerfil = useCallback(async (dados) => {
@@ -95,26 +144,30 @@ export function AppProvider({ children }) {
       const semEle = atual.filter((l) => l.id !== registro.id);
       return [...semEle, registro];
     });
+    agendarSync();
     return registro;
-  }, []);
+  }, [agendarSync]);
 
   const excluirLancamento = useCallback(async (id) => {
     await db.excluirLancamento(id);
     setLancamentos((atual) => atual.filter((l) => l.id !== id));
-  }, []);
+    agendarSync();
+  }, [agendarSync]);
 
   const duplicarLancamento = useCallback(async (l) => {
     const copia = { ...limpar(l), id: novoId(), criadoEm: Date.now(), atualizadoEm: Date.now() };
     await db.salvarLancamento(copia);
     setLancamentos((atual) => [...atual, copia]);
+    agendarSync();
     return copia;
-  }, []);
+  }, [agendarSync]);
 
   const fecharCompetencia = useCallback(async (id, resumo) => {
     const reg = {
       id,
       fechada: true,
       fechadaEm: Date.now(),
+      atualizadoEm: Date.now(),
       totalNormais: resumo.totalNormais,
       totalExtras: resumo.totalExtras,
       total: resumo.total,
@@ -125,14 +178,14 @@ export function AppProvider({ children }) {
   }, []);
 
   const reabrirCompetencia = useCallback(async (id) => {
-    const reg = { id, fechada: false, reabertaEm: Date.now() };
+    const reg = { id, fechada: false, reabertaEm: Date.now(), atualizadoEm: Date.now() };
     await db.salvarCompetencia(reg);
     setFechamentos((a) => [...a.filter((c) => c.id !== id), reg]);
   }, []);
 
   const registrarAssinatura = useCallback(async (id, assinatura) => {
     const atual = (await db.getCompetencia(id)) || { id };
-    const reg = { ...atual, assinatura };
+    const reg = { ...atual, assinatura, atualizadoEm: Date.now() };
     await db.salvarCompetencia(reg);
     setFechamentos((a) => [...a.filter((c) => c.id !== id), reg]);
   }, []);
@@ -143,12 +196,20 @@ export function AppProvider({ children }) {
     await db.setConfig('tema', novo);
   }, [tema]);
 
-  const recarregar = useCallback(async () => {
-    const [p, l, c] = await Promise.all([db.getPerfil(), db.listarLancamentos(), db.listarCompetencias()]);
-    setPerfil(p || null);
-    setLancamentos(l || []);
-    setFechamentos(c || []);
-  }, []);
+
+  /* Ao abrir o app, puxa o que foi lançado no outro aparelho. */
+  useEffect(() => {
+    if (!pronto) return;
+    sincronizar();
+    return () => clearTimeout(agendado.current);
+  }, [pronto]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Voltou para o app depois de ficar em segundo plano: confere de novo. */
+  useEffect(() => {
+    const aoVoltar = () => { if (document.visibilityState === 'visible') sincronizar(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    return () => document.removeEventListener('visibilitychange', aoVoltar);
+  }, [sincronizar]);
 
   /* ------------------------------------------------------------ Derivados */
 
@@ -180,7 +241,8 @@ export function AppProvider({ children }) {
     competenciasDisponiveis, fechamentos, tema, toast, avisar,
     salvarPerfil, salvarLancamento, excluirLancamento, duplicarLancamento,
     fecharCompetencia, reabrirCompetencia, registrarAssinatura,
-    alternarTema, recarregar
+    alternarTema, recarregar,
+    sincronizar, sincronizando, ultimaSync
   };
 
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
