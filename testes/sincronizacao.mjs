@@ -111,6 +111,14 @@ conf('o app sabe quando está instalado na tela inicial',
 conf('instalado, sai da tela em vez de abrir janelinha',
   /if \(ehAppInstalado\(\)\) \{\s*await autorizarSaindoDaTela\(\)/.test(dv));
 conf('o endereço de retorno não é inventado', /redirect_uri: RETORNO/.test(dv));
+
+/* Instalado, o app abre em /gcm-ponto/index.html; pelo navegador, em
+   /gcm-ponto/. Sem normalizar, o Google recusa um dos dois com
+   redirect_uri_mismatch — e a mensagem não explica nada. */
+conf('o retorno tira o index.html do endereço',
+  /replace\(\/index\\\.html\$\/, ''\)/.test(dv));
+const mf = JSON.parse(ler('../public/manifest.json'));
+conf('o app instalado abre na pasta, não no index.html', mf.start_url === './');
 conf('a recusa do guarda vira mensagem, não erro cru',
   /access_denied/.test(dv) && /não autorizou/.test(dv));
 
