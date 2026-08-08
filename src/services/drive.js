@@ -26,7 +26,12 @@ import {
 export const CLIENT_ID_PADRAO =
   '618176113793-28fqt6kapivpgv66qqg3tcjdce4mrnej.apps.googleusercontent.com';
 
-const ESCOPO = 'https://www.googleapis.com/auth/drive.file';
+/* Dois escopos, os dois "não sensíveis":
+   - drive.file: só o arquivo que o app cria. Não vê mais nada do Drive.
+   - userinfo.email: só para SABER qual conta foi escolhida. Sem isso o app não
+     tem como dizer ao Google "renove naquela mesma conta", e o Google abre a
+     lista de contas a cada renovação — de hora em hora. */
+const ESCOPO = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
 const NOME_ARQUIVO = 'gcm-ponto-dados.json';
 const GIS = 'https://accounts.google.com/gsi/client';
 
@@ -36,6 +41,7 @@ const GIS = 'https://accounts.google.com/gsi/client';
 let token = null;
 let expiraEm = 0;
 let clienteToken = null;
+let clienteConta;   // a conta com que o cliente atual foi montado
 
 const temToken = () => !!token && Date.now() < expiraEm - 60000;
 
@@ -70,18 +76,42 @@ export const setClientId = (id) => setConfig('driveClientId', id || CLIENT_ID_PA
 export const conectado = () => getConfig('driveLigado', false);
 export const setConectado = (v) => setConfig('driveLigado', !!v);
 
+/** O e-mail da conta escolhida. É o que evita a pergunta a cada renovação. */
+export const contaConectada = () => getConfig('driveConta', null);
+
+/** Pergunta ao Google qual conta autorizou. Falhar aqui não impede nada. */
+async function descobrirConta(t) {
+  try {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${t}` }
+    });
+    if (!r.ok) return null;
+    return (await r.json())?.email || null;
+  } catch {
+    return null;
+  }
+}
+
 async function pedirToken({ interativo }) {
   await carregarGIS();
   const clientId = await getClientId();
   if (!clientId) throw new Error('Falta o ID do cliente do Google nos Ajustes.');
 
+  const conta = await contaConectada();
+
   return new Promise((resolve, reject) => {
-    if (!clienteToken) {
+    /* O `hint` diz ao Google QUAL conta usar. Com ele, a renovação é silenciosa;
+       sem ele, o Google abre a lista de contas toda vez. O cliente é remontado
+       quando a conta muda, porque o hint é fixado na criação. */
+    if (!clienteToken || clienteConta !== conta) {
       clienteToken = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: ESCOPO,
+        hint: conta || undefined,
+        select_account: false,
         callback: () => {}
       });
+      clienteConta = conta;
     }
     clienteToken.callback = (resposta) => {
       if (resposta?.error) {
@@ -96,9 +126,10 @@ async function pedirToken({ interativo }) {
       expiraEm = Date.now() + (Number(resposta.expires_in || 3600) * 1000);
       resolve(token);
     };
-    /* Silencioso na rotina; só pede a tela de permissão quando o guarda
-       clicou em "Conectar" de propósito. */
-    clienteToken.requestAccessToken({ prompt: interativo ? 'consent' : '' });
+    /* A tela de permissão só aparece na PRIMEIRA conexão, quando ainda não se
+       sabe a conta. Depois disso é sempre silencioso, mesmo quando o guarda
+       aperta "Sincronizar agora". */
+    clienteToken.requestAccessToken({ prompt: (interativo && !conta) ? 'consent' : '' });
   });
 }
 
@@ -109,9 +140,13 @@ async function garantirToken({ interativo = false } = {}) {
 
 /** Liga a sincronização. Abre a tela de permissão do Google. */
 export async function conectar() {
-  await pedirToken({ interativo: true });
+  const t = await pedirToken({ interativo: true });
+  /* Guarda a conta escolhida: é o que faz o Google parar de perguntar. */
+  const conta = await descobrirConta(t);
+  if (conta) await setConfig('driveConta', conta);
+  clienteConta = undefined;   // força remontar o cliente já com o hint
   await setConectado(true);
-  return true;
+  return conta;
 }
 
 /** Desliga. Não apaga nada: nem daqui, nem do Drive. */
@@ -119,6 +154,9 @@ export async function desconectar() {
   try { window.google?.accounts?.oauth2?.revoke?.(token); } catch { /* já era */ }
   token = null;
   expiraEm = 0;
+  clienteToken = null;
+  clienteConta = undefined;
+  await setConfig('driveConta', null);
   await setConectado(false);
 }
 
@@ -251,10 +289,11 @@ export async function sincronizar({ interativo = false } = {}) {
 
 /** Estado para mostrar nos Ajustes. */
 export async function estado() {
-  const [ligado, ultima, erro, clientId] = await Promise.all([
-    conectado(), getConfig('driveUltimaSync', null), getConfig('driveErro', null), getClientId()
+  const [ligado, ultima, erro, clientId, conta] = await Promise.all([
+    conectado(), getConfig('driveUltimaSync', null), getConfig('driveErro', null),
+    getClientId(), contaConectada()
   ]);
-  return { ligado, ultima, erro, clientId };
+  return { ligado, ultima, erro, clientId, conta };
 }
 
 /** '2 minutos', 'há 3 dias' — para o guarda saber se pode confiar. */
