@@ -64,6 +64,11 @@ conf('termômetro em zona tranquila', d.querySelector('.termo-estado')?.textCont
 
 clique(nav('Calendário')); await esperar(450);
 conf('calendário renderizou o mês', d.querySelectorAll('.cal-day').length > 27);
+conf('calendário mostra a janela 21→20, não o mês do calendário',
+  d.querySelectorAll('.cal-day:not(.empty)').length === 31);
+conf('a janela começa no dia 21',
+  d.querySelector('.cal-day:not(.empty)')?.textContent.trim().startsWith('21'));
+conf('cabeçalho do calendário mostra o período', d.body.textContent.includes('21/07 a 20/08'));
 conf('calendário com dia de diária em azul', !!d.querySelector('.cal-day.fora'));
 clique(nav('Histórico')); await esperar(450);
 conf('histórico listou os 4 lançamentos', d.querySelectorAll('.item').length >= 4);
@@ -76,6 +81,17 @@ clique(btn('Relatório')); await esperar(500);
 conf('tela de relatório abriu', d.body.textContent.includes('Resumo da competência'));
 conf('botão de fechar competência', !!btn('Fechar'));
 conf('botão de assinar', !!btn('Assinar relatório'));
+
+/* Fechar a competência precisa cobrar o backup: o mês virou prova e só
+   existe dentro deste aparelho. */
+clique(btn('Fechar Agosto')); await esperar(400);
+conf('confirmação de fechamento abriu', d.body.textContent.includes('Fechar competência?'));
+clique(btn('Confirmar fechamento')); await esperar(600);
+conf('avisou para fazer backup ao fechar', d.body.textContent.includes('Este mês só existe aqui dentro'));
+conf('aviso oferece o backup completo', !!btn('Fazer backup agora'));
+clique(btn('Depois eu faço')); await esperar(350);
+conf('o aviso sai sem travar a tela', !d.body.textContent.includes('Este mês só existe aqui dentro'));
+conf('competência fechada mantém o backup à mão', !!btn('Fazer backup deste mês'));
 
 console.log(`\n═══ ${passos} passos concluídos ═══`);
 console.log('ERROS: ' + (erros.length ? '\n' + erros.join('\n') : 'nenhum'));
