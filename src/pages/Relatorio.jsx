@@ -18,7 +18,7 @@ import {
 export default function Relatorio({ voltar }) {
   const {
     perfil, resumo, competencia, competenciaFechada, fechamento,
-    fecharCompetencia, reabrirCompetencia, registrarAssinatura, avisar
+    fecharCompetencia, reabrirCompetencia, registrarAssinatura, avisar, sincronizar
   } = useApp();
 
   const [confirmandoFechar, setConfirmandoFechar] = useState(false);
@@ -218,6 +218,9 @@ export default function Relatorio({ voltar }) {
             await fecharCompetencia(competencia, resumo);
             setConfirmandoFechar(false);
             setPedindoBackup(true);
+            /* Mês fechado é prova: sobe para o Drive na hora, sem esperar
+               o guarda lembrar. Se falhar, não atrapalha — segue offline. */
+            sincronizar();
           }}>Confirmar fechamento</button>
           <button className="btn btn-ghost mt-14" onClick={() => setConfirmandoFechar(false)}>Cancelar</button>
         </Sheet>
