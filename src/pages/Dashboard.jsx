@@ -4,7 +4,7 @@ import { TopBar, SeletorCompetencia, Vazio } from '../components/UI.jsx';
 import Gauge, { GraficoMes, Termometro } from '../components/Gauge.jsx';
 import {
   CARGA_MENSAL, LIMITE_EXTRA, ALERTAS_EXTRA, horasCurto, nomeCompetencia, alertaExtras,
-  serieDiaria, formatarData, tipoPorId, DIAS_SEMANA, diaSemana, faixaHoraria
+  serieDiaria, formatarData, tipoPorId, DIAS_SEMANA, diaSemana, faixaHoraria, periodoCurto
 } from '../services/calc.js';
 import { IcoPlus, IcoDoc, IcoCalendar, IcoList, IcoAlert, IcoCheck, IcoLock, IcoPasta } from '../components/Icons.jsx';
 
@@ -32,6 +32,7 @@ export default function Dashboard({ ir, abrirLancamento }) {
                 ? <span className="tag tag-gray"><IcoLock size={11} style={{ verticalAlign: -1 }} /> Fechada</span>
                 : <span className="tag tag-green">Em andamento</span>}
             </div>
+            <div className="hint" style={{ margin: '0 0 10px' }}>{periodoCurto(competencia)}</div>
 
             <Gauge
               normais={resumo.totalNormais}
