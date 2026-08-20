@@ -1,6 +1,6 @@
 import { calcularCompetencia, duracaoHoras, somarDias, diasDeVirada, alertaExtras,
   TIPOS, tipoPorId, horasCurto, competenciaDe, estatisticas, faixaHoraria,
-  periodoDaCompetencia, diasDaCompetencia, periodoCurto, serieDiaria,
+  periodoDaCompetencia, diasDaCompetencia, periodoCurto, serieDiaria, proximaCompetencia,
   CARGA_MENSAL, LIMITE_EXTRA } from '../src/services/calc.js';
 
 let ok = 0, falhou = 0;
@@ -82,6 +82,18 @@ console.log('\n── ORDEM E RECÁLCULO ─────────────
   const semUm=calcularCompetencia(base.filter(l=>l.id!=='a1'));
   t('excluir lançamento antigo recalcula o mês', semUm.totalExtras, 0); }
 
+console.log('\n── VIRADA DE COMPETÊNCIA ────────────────────────────────────');
+t('depois de agosto vem setembro', proximaCompetencia('2026-08'), '2026-09');
+t('depois de dezembro vem janeiro do ano seguinte', proximaCompetencia('2026-12'), '2027-01');
+t('depois de janeiro vem fevereiro', proximaCompetencia('2027-01'), '2027-02');
+t('a competência seguinte começa no dia 21',
+  periodoDaCompetencia(proximaCompetencia('2026-08')).inicio, '2026-08-21');
+t('a seguinte começa no dia após o fim da anterior',
+  somarDias(periodoDaCompetencia('2026-08').fim, 1),
+  periodoDaCompetencia(proximaCompetencia('2026-08')).inicio);
+t('serviço do dia 21 já cai na competência seguinte',
+  competenciaDe(periodoDaCompetencia(proximaCompetencia('2026-08')).inicio), '2026-09');
+
 console.log('\n── DIVERSOS ─────────────────────────────────────────────────');
 console.log('\n── COMPETÊNCIA 21→20 ────────────────────────────────────────');
 t('dia 20 ainda é do mês corrente', competenciaDe('2026-08-20'), '2026-08');
@@ -118,6 +130,18 @@ t('período em texto curto', periodoCurto('2026-08'), '21/07 a 20/08');
   t('gráfico começa no dia 21 com 12h', [serie[0].dia, serie[0].normais], [21, 12]);
   t('gráfico termina no dia 20 com 12h', [serie.at(-1).dia, serie.at(-1).normais], [20, 12]);
 }
+
+console.log('\n── VIRADA DE COMPETÊNCIA ────────────────────────────────────');
+t('depois de agosto vem setembro', proximaCompetencia('2026-08'), '2026-09');
+t('depois de dezembro vem janeiro do ano seguinte', proximaCompetencia('2026-12'), '2027-01');
+t('depois de janeiro vem fevereiro', proximaCompetencia('2027-01'), '2027-02');
+t('a competência seguinte começa no dia 21',
+  periodoDaCompetencia(proximaCompetencia('2026-08')).inicio, '2026-08-21');
+t('a seguinte começa no dia após o fim da anterior',
+  somarDias(periodoDaCompetencia('2026-08').fim, 1),
+  periodoDaCompetencia(proximaCompetencia('2026-08')).inicio);
+t('serviço do dia 21 já cai na competência seguinte',
+  competenciaDe(periodoDaCompetencia(proximaCompetencia('2026-08')).inicio), '2026-09');
 
 console.log('\n── DIVERSOS ─────────────────────────────────────────────────');
 t('faixa mostra virada de dia', faixaHoraria({entrada:'07:00',saida:'07:00',data:'2026-08-01',dataSaida:'2026-08-02'}), '07:00 — 07:00 (+1d)');
