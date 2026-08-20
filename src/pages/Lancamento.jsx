@@ -4,7 +4,7 @@ import { Sheet } from '../components/UI.jsx';
 import {
   TIPOS, tipoPorId, duracaoHoras, horasCurto, hojeISO, competenciaDe,
   simular, formatarDataExtenso, CARGA_MENSAL, LIMITE_EXTRA, novoId,
-  somarDias, diasDeVirada, formatarData
+  somarDias, diasDeVirada, formatarData, dataSugeridaDa
 } from '../services/calc.js';
 import { IcoTrash, IcoCopy } from '../components/Icons.jsx';
 
@@ -19,11 +19,13 @@ const vazio = (data) => {
 export default function Lancamento({ registro, dataSugerida, fechar }) {
   const {
     lancamentos, salvarLancamento, excluirLancamento, duplicarLancamento,
-    avisar, fechamentos, setCompetencia
+    avisar, fechamentos, setCompetencia, competencia
   } = useApp();
 
   const [form, setForm] = useState(() => {
-    if (!registro) return vazio(dataSugerida);
+    /* Sem data escolhida no calendário, o formulário abre na competência que
+       o guarda está vendo — não no dia de hoje, que pode ser de outro mês. */
+    if (!registro) return vazio(dataSugerida || dataSugeridaDa(competencia));
     const base = { ...vazio(), ...registro };
     // lançamento gravado antes do campo existir: preserva o resultado que ele já tinha
     if (!registro.dataSaida) {
