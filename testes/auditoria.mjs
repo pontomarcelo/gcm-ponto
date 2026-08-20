@@ -1,6 +1,7 @@
 import { calcularCompetencia, duracaoHoras, somarDias, diasDeVirada, alertaExtras,
   TIPOS, tipoPorId, horasCurto, competenciaDe, estatisticas, faixaHoraria,
   periodoDaCompetencia, diasDaCompetencia, periodoCurto, serieDiaria, proximaCompetencia,
+  dataSugeridaDa,
   CARGA_MENSAL, LIMITE_EXTRA } from '../src/services/calc.js';
 
 let ok = 0, falhou = 0;
@@ -94,6 +95,18 @@ t('a seguinte começa no dia após o fim da anterior',
 t('serviço do dia 21 já cai na competência seguinte',
   competenciaDe(periodoDaCompetencia(proximaCompetencia('2026-08')).inicio), '2026-09');
 
+console.log('\n── DIA SUGERIDO AO LANÇAR ───────────────────────────────────');
+t('dentro da janela, sugere hoje', dataSugeridaDa('2026-08', '2026-08-05'), '2026-08-05');
+t('janela ainda não começou, sugere o dia 21',
+  dataSugeridaDa('2026-09', '2026-08-20'), '2026-08-21');
+t('janela já passou, sugere o dia 20', dataSugeridaDa('2026-06', '2026-08-20'), '2026-06-20');
+t('o dia sugerido pertence mesmo à competência',
+  competenciaDe(dataSugeridaDa('2026-09', '2026-08-20')), '2026-09');
+t('dia sugerido de mês passado cai no mês certo',
+  competenciaDe(dataSugeridaDa('2026-06', '2026-08-20')), '2026-06');
+t('virada de ano: janeiro sugere 21/12',
+  dataSugeridaDa('2027-01', '2026-12-15'), '2026-12-21');
+
 console.log('\n── DIVERSOS ─────────────────────────────────────────────────');
 console.log('\n── COMPETÊNCIA 21→20 ────────────────────────────────────────');
 t('dia 20 ainda é do mês corrente', competenciaDe('2026-08-20'), '2026-08');
@@ -142,6 +155,18 @@ t('a seguinte começa no dia após o fim da anterior',
   periodoDaCompetencia(proximaCompetencia('2026-08')).inicio);
 t('serviço do dia 21 já cai na competência seguinte',
   competenciaDe(periodoDaCompetencia(proximaCompetencia('2026-08')).inicio), '2026-09');
+
+console.log('\n── DIA SUGERIDO AO LANÇAR ───────────────────────────────────');
+t('dentro da janela, sugere hoje', dataSugeridaDa('2026-08', '2026-08-05'), '2026-08-05');
+t('janela ainda não começou, sugere o dia 21',
+  dataSugeridaDa('2026-09', '2026-08-20'), '2026-08-21');
+t('janela já passou, sugere o dia 20', dataSugeridaDa('2026-06', '2026-08-20'), '2026-06-20');
+t('o dia sugerido pertence mesmo à competência',
+  competenciaDe(dataSugeridaDa('2026-09', '2026-08-20')), '2026-09');
+t('dia sugerido de mês passado cai no mês certo',
+  competenciaDe(dataSugeridaDa('2026-06', '2026-08-20')), '2026-06');
+t('virada de ano: janeiro sugere 21/12',
+  dataSugeridaDa('2027-01', '2026-12-15'), '2026-12-21');
 
 console.log('\n── DIVERSOS ─────────────────────────────────────────────────');
 t('faixa mostra virada de dia', faixaHoraria({entrada:'07:00',saida:'07:00',data:'2026-08-01',dataSaida:'2026-08-02'}), '07:00 — 07:00 (+1d)');
