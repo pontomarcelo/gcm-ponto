@@ -165,6 +165,18 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   margin-bottom: 14px;
 }
 
+/* Navegação de mês no card de cima: setas coladas no nome, do tamanho que o
+   dedo acerta sem mirar. O deslize faz o mesmo, mas seta é o que se vê. */
+.comp-nav { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.comp-seta {
+  width: 34px; height: 34px; flex: none; border: 0; border-radius: 10px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  display: grid; place-items: center;
+  transition: transform .15s, background .15s, opacity .15s;
+}
+.comp-seta:active { transform: scale(.9); background: var(--bg); }
+.comp-seta:disabled { opacity: .25; cursor: default; }
+
 .section-title {
   font-family: var(--font-display); font-size: 12px; font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
