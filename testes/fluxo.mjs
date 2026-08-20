@@ -106,6 +106,16 @@ conf('o início também virou para setembro', d.body.textContent.includes('Setem
 conf('setembro começa zerado', d.body.textContent.includes('Nenhuma jornada neste mês'));
 conf('agosto continua na lista de competências', d.body.textContent.includes('Agosto de 2026'));
 
+/* Trocar de mês pela seta do próprio card, sem descer até o seletor. */
+const seta = (rotulo) => [...d.querySelectorAll('.comp-seta')]
+  .find((b) => b.getAttribute('aria-label') === rotulo);
+conf('o card tem as duas setas de mês', d.querySelectorAll('.comp-seta').length === 2);
+clique(seta('Competência anterior')); await esperar(450);
+conf('a seta para trás volta para agosto', d.body.textContent.includes('Agosto de 2026'));
+conf('agosto voltou marcado como fechado', d.body.textContent.includes('Fechada'));
+clique(seta('Próxima competência')); await esperar(450);
+conf('a seta para frente devolve setembro', d.body.textContent.includes('Setembro de 2026'));
+
 /* O erro que o dono encontrou: em setembro, o botão Lançar abria o formulário
    no dia de hoje — que ainda é de agosto, mês fechado — e travava tudo. */
 clique(btn('Lançar')); await esperar(500);
