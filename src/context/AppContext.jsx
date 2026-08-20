@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback, u
 import * as db from '../services/db.js';
 import * as drive from '../services/drive.js';
 import {
-  calcularCompetencia, competenciaAtual, competenciaDe, estatisticas, novoId
+  calcularCompetencia, competenciaAtual, competenciaDe, estatisticas, novoId,
+  proximaCompetencia
 } from '../services/calc.js';
 
 const Ctx = createContext(null);
@@ -175,6 +176,11 @@ export function AppProvider({ children }) {
     };
     await db.salvarCompetencia(reg);
     setFechamentos((a) => [...a.filter((c) => c.id !== id), reg]);
+
+    /* Mês fechado é arquivo: fica guardado e consultável, mas a tela segue
+       para a competência seguinte. Sem isso o guarda continuaria olhando um
+       mês travado, sem lugar para lançar o serviço do dia 21. */
+    setCompetencia((atual) => (atual === id ? proximaCompetencia(id) : atual));
   }, []);
 
   const reabrirCompetencia = useCallback(async (id) => {
@@ -237,7 +243,12 @@ export function AppProvider({ children }) {
   const competenciasDisponiveis = useMemo(() => {
     const set = new Set(lancamentos.map((l) => l.competencia));
     set.add(competenciaAtual());
-    fechamentos.forEach((f) => set.add(f.id));
+    fechamentos.forEach((f) => {
+      set.add(f.id);
+      /* Fechou agosto? Setembro passa a existir na lista mesmo sem lançamento
+         nenhum — é para onde o app leva o guarda, e ele precisa poder voltar. */
+      if (f.fechada) set.add(proximaCompetencia(f.id));
+    });
     return [...set].filter(Boolean).sort().reverse();
   }, [lancamentos, fechamentos]);
 
