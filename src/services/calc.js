@@ -152,6 +152,21 @@ export function periodoCurto(comp) {
   return `${inicio.slice(8, 10)}/${inicio.slice(5, 7)} a ${fim.slice(8, 10)}/${fim.slice(5, 7)}`;
 }
 
+/**
+ * O dia que o formulário deve sugerir ao lançar numa competência.
+ *
+ * Sugerir "hoje" sempre está errado: quem fechou agosto e seguiu para setembro
+ * ainda vive no dia 20, que pertence ao mês fechado — o formulário abriria
+ * travado. Vale o dia válido mais perto de hoje dentro da janela.
+ */
+export function dataSugeridaDa(comp, hoje = hojeISO()) {
+  if (!comp) return hoje;
+  const { inicio, fim } = periodoDaCompetencia(comp);
+  if (hoje < inicio) return inicio;
+  if (hoje > fim) return fim;
+  return hoje;
+}
+
 export const nomeCompetencia = (comp) => {
   if (!comp) return '';
   const [ano, mes] = comp.split('-');
