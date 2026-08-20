@@ -114,6 +114,17 @@ export const hojeISO = () => dataISO(new Date());
 
 export const competenciaAtual = () => competenciaDe(hojeISO());
 
+/**
+ * A competência seguinte. Agosto/2026 -> Setembro/2026.
+ *
+ * Usada ao fechar o mês: competência fechada fica guardada, e o guarda
+ * segue trabalhando na próxima em vez de continuar olhando uma tela travada.
+ */
+export const proximaCompetencia = (comp) => {
+  const [ano, mes] = comp.split('-').map(Number);
+  return mes === 12 ? compISO(ano + 1, 1) : compISO(ano, mes + 1);
+};
+
 /** Primeiro e último dia da competência: 21 do mês anterior a 20 deste. */
 export function periodoDaCompetencia(comp) {
   const [ano, mes] = comp.split('-').map(Number);
