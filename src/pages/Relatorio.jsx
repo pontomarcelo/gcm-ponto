@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext.jsx';
 import { TopBar, Sheet } from '../components/UI.jsx';
 import {
   CARGA_MENSAL, LIMITE_EXTRA, horasCurto, nomeCompetencia, competenciaAtual,
-  periodoCurto, hojeISO, MESES
+  periodoCurto, hojeISO, MESES, proximaCompetencia
 } from '../services/calc.js';
 import { getConfig, setConfig } from '../services/db.js';
 import { compartilharPDF, baixarArquivo, abrirWhatsApp, abrirEmail, imprimirPDF } from '../services/share.js';
@@ -38,6 +38,11 @@ export default function Relatorio({ voltar }) {
   /* Aviso de backup: aparece logo depois de fechar a competência. É o momento
      em que o mês virou prova — se o celular sumir agora, some com ele. */
   const [pedindoBackup, setPedindoBackup] = useState(false);
+
+  /* Retrato do mês no instante em que foi fechado. A tela já pulou para a
+     competência seguinte, então o aviso de backup não pode ler `competencia`
+     nem `resumo`: eles agora falam do mês novo, que está vazio. */
+  const [mesFechado, setMesFechado] = useState(null);
 
   /* Fecho do documento: cidade, data e o nome de quem recebe. Fica guardado
      entre um mês e outro — o comandante costuma ser o mesmo, e redigitar todo
@@ -259,9 +264,12 @@ export default function Relatorio({ voltar }) {
           <div className="kv"><span>Extras</span><b>{horasCurto(resumo.totalExtras)}</b></div>
           <div className="kv"><span>Total</span><b>{horasCurto(resumo.total)}</b></div>
           <button className="btn btn-navy mt-20" onClick={async () => {
-            await fecharCompetencia(competencia, resumo);
+            const fechada = competencia;
+            setMesFechado({ id: fechada, total: resumo.total });
+            await fecharCompetencia(fechada, resumo);
             setConfirmandoFechar(false);
             setPedindoBackup(true);
+            avisar(`${nomeCompetencia(fechada)} fechada. Você já está em ${nomeCompetencia(proximaCompetencia(fechada))}.`);
             /* Mês fechado é prova: sobe para o Drive na hora, sem esperar
                o guarda lembrar. Se falhar, não atrapalha — segue offline. */
             sincronizar();
@@ -313,15 +321,15 @@ export default function Relatorio({ voltar }) {
       {pedindoBackup && (
         <Sheet
           titulo="Competência fechada"
-          subtitulo={`Guarde ${nomeCompetencia(competencia)} fora do celular`}
-          fechar={() => { setPedindoBackup(false); setProgressoBackup(null); }}
+          subtitulo={`Guarde ${nomeCompetencia(mesFechado?.id || competencia)} fora do celular`}
+          fechar={() => { setPedindoBackup(false); setProgressoBackup(null); setMesFechado(null); }}
         >
           <div className="alert alert-orange">
             <IcoAlert size={19} style={{ flex: 'none' }} />
             <div>
               <b>Este mês só existe aqui dentro</b>
               O app não usa servidor. Se o aparelho quebrar ou sumir, estas
-              {' '}{horasCurto(resumo.total)} vão junto. O backup completo leva os
+              {' '}{horasCurto(mesFechado?.total ?? resumo.total)} vão junto. O backup completo leva os
               lançamentos e os arquivos da gaveta num pacote só.
             </div>
           </div>
@@ -336,6 +344,7 @@ export default function Relatorio({ voltar }) {
             try {
               const r = await baixarBackupCompleto(setProgressoBackup);
               setPedindoBackup(false);
+              setMesFechado(null);
               avisar(`Backup ${r.via}: ${r.nome}`);
             } catch (e) {
               avisar(e?.message || 'Não consegui gerar o backup.');
@@ -352,7 +361,7 @@ export default function Relatorio({ voltar }) {
           </p>
 
           <button className="btn btn-ghost" disabled={!!progressoBackup}
-            onClick={() => setPedindoBackup(false)}>
+            onClick={() => { setPedindoBackup(false); setMesFechado(null); }}>
             Depois eu faço
           </button>
         </Sheet>
