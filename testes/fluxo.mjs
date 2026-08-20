@@ -106,6 +106,15 @@ conf('o início também virou para setembro', d.body.textContent.includes('Setem
 conf('setembro começa zerado', d.body.textContent.includes('Nenhuma jornada neste mês'));
 conf('agosto continua na lista de competências', d.body.textContent.includes('Agosto de 2026'));
 
+/* O erro que o dono encontrou: em setembro, o botão Lançar abria o formulário
+   no dia de hoje — que ainda é de agosto, mês fechado — e travava tudo. */
+clique(btn('Lançar')); await esperar(500);
+conf('o formulário abriu', d.body.textContent.includes('Nova jornada'));
+conf('lançar em setembro não cai no mês fechado',
+  !d.body.textContent.includes('Este mês já foi fechado'));
+conf('a data sugerida é do dia 21 em diante',
+  d.querySelector('input[type="date"]')?.value >= '2026-08-21');
+
 console.log(`\n═══ ${passos} passos concluídos ═══`);
 console.log('ERROS: ' + (erros.length ? '\n' + erros.join('\n') : 'nenhum'));
 process.exit(erros.length ? 1 : 0);
