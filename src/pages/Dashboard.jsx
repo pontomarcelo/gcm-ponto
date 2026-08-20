@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext.jsx';
 import { TopBar, SeletorCompetencia, Vazio } from '../components/UI.jsx';
 import Gauge, { GraficoMes, Termometro } from '../components/Gauge.jsx';
@@ -6,11 +6,32 @@ import {
   CARGA_MENSAL, LIMITE_EXTRA, ALERTAS_EXTRA, horasCurto, nomeCompetencia, alertaExtras,
   serieDiaria, formatarData, tipoPorId, DIAS_SEMANA, diaSemana, faixaHoraria, periodoCurto
 } from '../services/calc.js';
-import { IcoPlus, IcoDoc, IcoCalendar, IcoList, IcoAlert, IcoCheck, IcoLock, IcoPasta } from '../components/Icons.jsx';
+import { IcoPlus, IcoDoc, IcoCalendar, IcoList, IcoAlert, IcoCheck, IcoLock, IcoPasta, IcoChevron } from '../components/Icons.jsx';
 
 export default function Dashboard({ ir, abrirLancamento }) {
-  const { perfil, resumo, competencia, competenciaFechada } = useApp();
+  const {
+    perfil, resumo, competencia, competenciaFechada,
+    competenciasDisponiveis, setCompetencia
+  } = useApp();
   const [seletor, setSeletor] = useState(false);
+
+  /* Trocar de mês sem descer a tela inteira até o seletor. A lista vem da mais
+     nova para a mais antiga, então avançar no tempo é andar para trás nela. */
+  const posicao = competenciasDisponiveis.indexOf(competencia);
+  const maisAntiga = competenciasDisponiveis[posicao + 1] || null;
+  const maisNova = posicao > 0 ? competenciasDisponiveis[posicao - 1] : null;
+
+  /* Deslizar o card: para a esquerda avança o mês, para a direita volta.
+     O limite de 45px evita que um toque torto conte como deslize. */
+  const toque = useRef(null);
+  const aoTocar = (e) => { toque.current = e.touches[0]?.clientX ?? null; };
+  const aoSoltar = (e) => {
+    if (toque.current === null) return;
+    const andou = (e.changedTouches[0]?.clientX ?? toque.current) - toque.current;
+    toque.current = null;
+    if (andou < -45 && maisNova) setCompetencia(maisNova);
+    if (andou > 45 && maisAntiga) setCompetencia(maisAntiga);
+  };
 
   const alerta = alertaExtras(resumo.totalExtras);
   const serie = serieDiaria(resumo, competencia);
@@ -25,9 +46,19 @@ export default function Dashboard({ ir, abrirLancamento }) {
 
       <div className="screen">
         <div className="pull-up">
-          <div className="card">
+          <div className="card" onTouchStart={aoTocar} onTouchEnd={aoSoltar}>
             <div className="spread" style={{ marginBottom: 4 }}>
-              <span className="card-title" style={{ margin: 0 }}>{nomeCompetencia(competencia)}</span>
+              <div className="comp-nav">
+                <button className="comp-seta" disabled={!maisAntiga} aria-label="Competência anterior"
+                  onClick={() => maisAntiga && setCompetencia(maisAntiga)}>
+                  <IcoChevron size={17} style={{ transform: 'rotate(180deg)' }} />
+                </button>
+                <span className="card-title" style={{ margin: 0 }}>{nomeCompetencia(competencia)}</span>
+                <button className="comp-seta" disabled={!maisNova} aria-label="Próxima competência"
+                  onClick={() => maisNova && setCompetencia(maisNova)}>
+                  <IcoChevron size={17} />
+                </button>
+              </div>
               {competenciaFechada
                 ? <span className="tag tag-gray"><IcoLock size={11} style={{ verticalAlign: -1 }} /> Fechada</span>
                 : <span className="tag tag-green">Em andamento</span>}
