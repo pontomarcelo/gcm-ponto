@@ -96,7 +96,15 @@ conf('avisou para fazer backup ao fechar', d.body.textContent.includes('Este mê
 conf('aviso oferece o backup completo', !!btn('Fazer backup agora'));
 clique(btn('Depois eu faço')); await esperar(350);
 conf('o aviso sai sem travar a tela', !d.body.textContent.includes('Este mês só existe aqui dentro'));
-conf('competência fechada mantém o backup à mão', !!btn('Fazer backup deste mês'));
+
+/* Fechou, seguiu. O mês travado fica guardado, mas a tela anda para a
+   competência seguinte — senão o guarda não teria onde lançar o dia 21. */
+conf('seguiu para setembro depois de fechar', d.body.textContent.includes('Setembro de 2026'));
+conf('a competência nova está aberta', !!btn('Fechar Setembro'));
+clique(nav('Início')); await esperar(500);
+conf('o início também virou para setembro', d.body.textContent.includes('Setembro de 2026'));
+conf('setembro começa zerado', d.body.textContent.includes('Nenhuma jornada neste mês'));
+conf('agosto continua na lista de competências', d.body.textContent.includes('Agosto de 2026'));
 
 console.log(`\n═══ ${passos} passos concluídos ═══`);
 console.log('ERROS: ' + (erros.length ? '\n' + erros.join('\n') : 'nenhum'));
