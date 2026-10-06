@@ -51,7 +51,7 @@ export const TIPOS = [
     responsavel: 'Comandante', local: false, observacao: false, justificativa: false
   },
   {
-    id: 'extra', nome: 'Escala Extra', temHorario: true, contaJornada: true, convocada: true, doisDias: false,
+    id: 'extra', nome: 'Escala Extra', temHorario: true, contaJornada: true, convocada: true, doisDias: true,
     responsavel: 'Quem solicitou a extra', local: true, observacao: true, justificativa: true
   },
   {
