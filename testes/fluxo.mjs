@@ -36,7 +36,7 @@ p('cadastro do guarda salvo no IndexedDB');
 
 const lancar=async(cfg)=>{clique(btn('Lançar')); await esperar(350);
   if(cfg.tipo){clique(chip(cfg.tipo)); await esperar(250);}
-  set('data',cfg.data); if(cfg.entrada) set('entrada',cfg.entrada); if(cfg.saida) set('saida',cfg.saida);
+  set('data',cfg.data); if(cfg.dataSaida) set('dataSaida',cfg.dataSaida); if(cfg.entrada) set('entrada',cfg.entrada); if(cfg.saida) set('saida',cfg.saida);
   if(cfg.diaSeguinte) clique([...d.querySelectorAll('.chip')].find(c=>c.textContent.includes('dia seguinte')));
   await esperar(200);
   if(cfg.comandante) set('comandante',cfg.comandante);
@@ -48,6 +48,8 @@ await lancar({data:'2026-08-03',entrada:'07:00',saida:'07:00',diaSeguinte:true,c
 p('escala normal de 24h com virada de dia');
 await lancar({tipo:'Escala Extra',data:'2026-08-05',entrada:'18:00',saida:'23:00',comandante:'Secretário Antônio',local:'Feira',justificativa:'Reforço na feira.'});
 p('escala extra convocada com justificativa');
+await lancar({tipo:'Escala Extra',data:'2026-08-06',dataSaida:'2026-08-07',entrada:'22:00',saida:'00:00',comandante:'Insp. Silva',local:'Casa da Mulher',justificativa:'Reforço na Patrulha Maria da Penha.'});
+p('escala extra com saída à meia-noite no dia seguinte');
 await lancar({tipo:'Diária',data:'2026-08-07',entrada:'08:00',saida:'17:00',comandante:'Cmt. Geral',local:'Fortaleza',justificativa:'Reunião regional.'});
 p('diária registrada fora da folha');
 await lancar({tipo:'Atestado',data:'2026-08-09'});
@@ -55,7 +57,7 @@ p('atestado sem carga horária');
 
 let txt=d.body.textContent;
 const conf=(nome,cond)=>{if(cond){passos++;console.log('  ok  │ '+nome);}else{erros.push('CONFERÊNCIA: '+nome);console.log('FALHA │ '+nome);}};
-conf('dashboard: 29h na folha', txt.includes('29h'));
+conf('dashboard: 31h na folha', txt.includes('31h'));
 conf('dashboard: 24h normais',/Horas normais24h/.test(txt.replace(/\s/g,'')) || txt.includes('24h'));
 conf('dashboard: diárias em card próprio', txt.includes('Diárias (fora da folha)'));
 conf('termômetro presente', !!d.querySelector('.termo'));
@@ -76,7 +78,7 @@ conf('mostra para onde vai cada metade do mês', d.body.textContent.includes('Pa
 conf('metade final do mês aponta para setembro', d.body.textContent.includes('Setembro de 2026'));
 conf('calendário com dia de diária em azul', !!d.querySelector('.cal-day.fora'));
 clique(nav('Histórico')); await esperar(450);
-conf('histórico listou os 4 lançamentos', d.querySelectorAll('.item').length >= 4);
+conf('histórico listou os 5 lançamentos', d.querySelectorAll('.item').length >= 5);
 clique(nav('Números')); await esperar(450);
 conf('estatísticas abriram', d.body.textContent.includes('Maior jornada'));
 clique(nav('Ajustes')); await esperar(450);
