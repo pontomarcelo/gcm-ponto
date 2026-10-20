@@ -398,11 +398,11 @@ export function alertaExtras(totalExtras) {
       texto: 'Você chegou ao limite mensal de hora extra. Novas escalas vão passar do teto.' };
   }
   if (totalExtras >= 40) {
-    return { nivel: 'orange', titulo: '40 horas extras',
+    return { nivel: 'orange', titulo: `Atenção: ${horasCurto(totalExtras)} extras`,
       texto: `Faltam ${horasCurto(LIMITE_EXTRA - totalExtras)} para o teto de 44h.` };
   }
   if (totalExtras >= 35) {
-    return { nivel: 'orange', titulo: '35 horas extras',
+    return { nivel: 'orange', titulo: `Atenção: ${horasCurto(totalExtras)} extras`,
       texto: `Faltam ${horasCurto(LIMITE_EXTRA - totalExtras)} para o teto de 44h.` };
   }
   if (totalExtras >= 30) {
