@@ -8,7 +8,7 @@
  * em segundo plano, valendo na próxima abertura.
  */
 
-const VERSION = 'gcm-ponto-v1.2.2';
+const VERSION = 'gcm-ponto-v1.2.3';
 const CACHE_FONTES = 'gcm-ponto-fontes-v1';
 
 const APP_SHELL = [
