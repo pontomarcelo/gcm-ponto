@@ -20,7 +20,7 @@ import {
 export default function Ajustes({ ir }) {
   const {
     perfil, tema, alternarTema, avisar, recarregar, lancamentos,
-    competenciasDisponiveis, fechamentos, setCompetencia
+    competenciasDisponiveis, fechamentos, setCompetencia, reabrirCompetencia
   } = useApp();
 
   const [editandoPerfil, setEditandoPerfil] = useState(false);
@@ -113,13 +113,26 @@ export default function Ajustes({ ir }) {
             const r = calcularCompetencia(lancamentos.filter((l) => l.competencia === c));
             const f = fechamentos.find((x) => x.id === c);
             return (
-              <div key={c} className="kv" style={{ cursor: 'pointer' }} onClick={() => { setCompetencia(c); ir('dashboard'); }}>
-                <span>{nomeCompetencia(c)}</span>
-                <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <b>{horasCurto(r.total)}</b>
-                  {f?.fechada && <span className="tag tag-green">fechada</span>}
-                  {f?.assinatura && <span className="tag tag-gray">assinada</span>}
-                </span>
+              <div key={c}>
+                <div className="kv" style={{ cursor: 'pointer' }} onClick={() => { setCompetencia(c); ir('dashboard'); }}>
+                  <span>{nomeCompetencia(c)}</span>
+                  <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <b>{horasCurto(r.total)}</b>
+                    {f?.fechada && <span className="tag tag-green">fechada</span>}
+                    {f?.assinatura && <span className="tag tag-gray">assinada</span>}
+                  </span>
+                </div>
+                {f?.fechada && (
+                  <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginBottom: 12 }}
+                    onClick={async () => {
+                      await reabrirCompetencia(c);
+                      setCompetencia(c);
+                      ir('dashboard');
+                      avisar('Competência reaberta para edição.');
+                    }}>
+                    Reabrir {nomeCompetencia(c)} para corrigir
+                  </button>
+                )}
               </div>
             );
           })}
