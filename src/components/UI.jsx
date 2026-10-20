@@ -70,7 +70,9 @@ const ABAS = [
 ];
 
 export function BottomNav({ atual, ir }) {
-  return (
+  /* Montada direto no body para continuar fixa à janela durante a rolagem,
+     independentemente de transformações ou animações da tela atual. */
+  return createPortal(
     <nav className="nav" aria-label="Navegação principal">
       {ABAS.map(({ id, nome, Icone }) => (
         <button key={id} className={atual === id ? 'on' : ''} onClick={() => ir(id)}
@@ -79,7 +81,8 @@ export function BottomNav({ atual, ir }) {
           {nome}
         </button>
       ))}
-    </nav>
+    </nav>,
+    document.body
   );
 }
 
